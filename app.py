@@ -47,6 +47,7 @@ def encontrar_col(busqueda):
 col_sucursal = encontrar_col("sucursal")
 col_producto = encontrar_col("producto / servicio + variante")
 col_mes = encontrar_col("mes")
+col_tipo_producto = encontrar_col("tipo de producto / servicio")
 
 medidas_esperadas = ["Subtotal Neto", "Subtotal Bruto", "Margen Neto", "Costo Neto", "Impuestos", "Cantidad"]
 medidas = [m for m in medidas_esperadas if m in cols]
@@ -66,7 +67,7 @@ sucursales_disponibles = sorted(df[col_sucursal].dropna().unique().tolist())
 # --- Sidebar filtros ---
 st.sidebar.header("Filtros")
 
-# Si solo hay una sucursal, la fijamos y no mostramos filtro
+# Filtro sucursal
 if len(sucursales_disponibles) == 1:
     seleccion_sucursal = sucursales_disponibles[0]
     st.sidebar.markdown(f"**Sucursal:** {seleccion_sucursal}")
@@ -74,11 +75,20 @@ else:
     sucursales = ["Todas"] + sucursales_disponibles
     seleccion_sucursal = st.sidebar.selectbox("Seleccionar Sucursal", sucursales)
 
+# Filtro producto
 productos = ["Todos"] + sorted(df[col_producto].dropna().unique().tolist())
 seleccion_producto = st.sidebar.selectbox("Seleccionar Producto", productos)
 
+# Filtro mes
 meses = ["Todos"] + sorted(df[col_mes].dropna().unique().tolist())
 seleccion_mes = st.sidebar.selectbox("Seleccionar Mes", meses)
+
+# Filtro tipo producto si existe
+if col_tipo_producto:
+    tipos_producto = ["Todos"] + sorted(df[col_tipo_producto].dropna().unique().tolist())
+    seleccion_tipo_producto = st.sidebar.selectbox("Seleccionar Tipo de Producto / Servicio", tipos_producto)
+else:
+    seleccion_tipo_producto = None
 
 # --- Aplicar filtros ---
 df_filtrado = df.copy()
@@ -87,7 +97,6 @@ if len(sucursales_disponibles) > 1:
     if seleccion_sucursal != "Todas":
         df_filtrado = df_filtrado[df_filtrado[col_sucursal] == seleccion_sucursal]
 else:
-    # Filtro automático por única sucursal
     df_filtrado = df_filtrado[df_filtrado[col_sucursal] == seleccion_sucursal]
 
 if seleccion_producto != "Todos":
@@ -95,6 +104,9 @@ if seleccion_producto != "Todos":
 
 if seleccion_mes != "Todos":
     df_filtrado = df_filtrado[df_filtrado[col_mes] == seleccion_mes]
+
+if seleccion_tipo_producto and seleccion_tipo_producto != "Todos":
+    df_filtrado = df_filtrado[df_filtrado[col_tipo_producto] == seleccion_tipo_producto]
 
 if df_filtrado.empty:
     st.warning("No hay datos para los filtros seleccionados.")
@@ -128,26 +140,25 @@ col6.metric("Cantidad Vendida", f"{int(resumen.get('Cantidad', 0)):,}".replace("
 
 st.markdown("## 📈 Análisis por Mes")
 
-# Ventas por mes (Subtotal Neto)
 ventas_mes = df_filtrado.groupby(col_mes)["Subtotal Neto"].sum().sort_index()
 st.bar_chart(ventas_mes)
 
-# Margen neto por mes
 margen_mes = df_filtrado.groupby(col_mes)["Margen Neto"].sum().sort_index()
 st.line_chart(margen_mes)
 
-# Mostrar gráfico por sucursal solo si hay más de una
 if len(sucursales_disponibles) > 1:
     st.markdown("## 🏪 Ventas por Sucursal")
     ventas_suc = df_filtrado.groupby(col_sucursal)["Subtotal Neto"].sum().sort_values(ascending=False)
     st.bar_chart(ventas_suc)
 
-# Top 10 productos por ventas
 st.markdown("## 🛒 Top 10 Productos por Subtotal Neto")
 top_prod = df_filtrado.groupby(col_producto)["Subtotal Neto"].sum().sort_values(ascending=False).head(10)
 st.bar_chart(top_prod)
 
-# --- Tabla detallada ---
+if col_tipo_producto:
+    st.markdown(f"## 📊 Ventas por Tipo de Producto / Servicio ({seleccion_tipo_producto or 'Todos'})")
+    ventas_tipo = df_filtrado.groupby(col_tipo_producto)["Subtotal Neto"].sum().sort_values(ascending=False)
+    st.bar_chart(ventas_tipo)
+
 st.markdown("## 📋 Detalle de Ventas")
 st.dataframe(df_filtrado.sort_values(by="Subtotal Neto", ascending=False), use_container_width=True)
-
