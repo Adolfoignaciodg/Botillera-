@@ -75,20 +75,24 @@ else:
     sucursales = ["Todas"] + sucursales_disponibles
     seleccion_sucursal = st.sidebar.selectbox("Seleccionar Sucursal", sucursales)
 
-# Filtro producto
-productos = ["Todos"] + sorted(df[col_producto].dropna().unique().tolist())
-seleccion_producto = st.sidebar.selectbox("Seleccionar Producto", productos)
-
-# Filtro mes
-meses = ["Todos"] + sorted(df[col_mes].dropna().unique().tolist())
-seleccion_mes = st.sidebar.selectbox("Seleccionar Mes", meses)
-
 # Filtro tipo producto si existe
 if col_tipo_producto:
     tipos_producto = ["Todos"] + sorted(df[col_tipo_producto].dropna().unique().tolist())
     seleccion_tipo_producto = st.sidebar.selectbox("Seleccionar Tipo de Producto / Servicio", tipos_producto)
 else:
     seleccion_tipo_producto = None
+
+# Filtrar productos para llenar el filtro productos DEPENDIENTE del tipo producto seleccionado
+df_para_productos = df.copy()
+if seleccion_tipo_producto and seleccion_tipo_producto != "Todos" and col_tipo_producto:
+    df_para_productos = df_para_productos[df_para_productos[col_tipo_producto] == seleccion_tipo_producto]
+
+productos = ["Todos"] + sorted(df_para_productos[col_producto].dropna().unique().tolist())
+seleccion_producto = st.sidebar.selectbox("Seleccionar Producto", productos)
+
+# Filtro mes
+meses = ["Todos"] + sorted(df[col_mes].dropna().unique().tolist())
+seleccion_mes = st.sidebar.selectbox("Seleccionar Mes", meses)
 
 # --- Aplicar filtros ---
 df_filtrado = df.copy()
@@ -99,14 +103,14 @@ if len(sucursales_disponibles) > 1:
 else:
     df_filtrado = df_filtrado[df_filtrado[col_sucursal] == seleccion_sucursal]
 
+if seleccion_tipo_producto and seleccion_tipo_producto != "Todos":
+    df_filtrado = df_filtrado[df_filtrado[col_tipo_producto] == seleccion_tipo_producto]
+
 if seleccion_producto != "Todos":
     df_filtrado = df_filtrado[df_filtrado[col_producto] == seleccion_producto]
 
 if seleccion_mes != "Todos":
     df_filtrado = df_filtrado[df_filtrado[col_mes] == seleccion_mes]
-
-if seleccion_tipo_producto and seleccion_tipo_producto != "Todos":
-    df_filtrado = df_filtrado[df_filtrado[col_tipo_producto] == seleccion_tipo_producto]
 
 if df_filtrado.empty:
     st.warning("No hay datos para los filtros seleccionados.")
@@ -137,7 +141,6 @@ col5.metric("Impuestos", formato_moneda(resumen.get("Impuestos", 0)))
 col6.metric("Cantidad Vendida", f"{int(resumen.get('Cantidad', 0)):,}".replace(",", "."))
 
 # --- Gráficos ---
-
 st.markdown("## 📈 Análisis por Mes")
 
 ventas_mes = df_filtrado.groupby(col_mes)["Subtotal Neto"].sum().sort_index()
@@ -162,3 +165,4 @@ if col_tipo_producto:
 
 st.markdown("## 📋 Detalle de Ventas")
 st.dataframe(df_filtrado.sort_values(by="Subtotal Neto", ascending=False), use_container_width=True)
+
