@@ -67,9 +67,25 @@ for col in medidas:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
+# --- Normalizar columna Mes para tener solo nombre en minúsculas ---
+def numero_a_mes(mes):
+    m = str(mes).strip()
+    if m.isdigit():
+        n = int(m)
+        if 1 <= n <= 12:
+            meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
+                     "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+            return meses[n-1]
+    # Si es texto, sacar números al inicio y pasar a minúscula
+    # Ejemplo: "01 enero" -> "enero"
+    import re
+    texto_sin_num = re.sub(r"^\d+\s*", "", m).lower()
+    return texto_sin_num
+
+df[col_mes] = df[col_mes].apply(numero_a_mes)
+
 # --- Crear columna Temporada ---
 def mes_a_temporada(mes):
-    mes = str(mes).lower()
     if mes in ['diciembre', 'enero', 'febrero']:
         return 'Verano'
     elif mes in ['marzo', 'abril', 'mayo']:
@@ -241,7 +257,6 @@ with tab1:
 with tab2:
     st.markdown("## 🔍 Análisis ABC de Productos")
 
-    # Opción de filtrar por mes o total
     opcion_abc = st.radio("Ver análisis ABC por:", ("Total", "Por Mes"))
 
     if opcion_abc == "Total":
@@ -257,7 +272,6 @@ with tab2:
 
         st.dataframe(df_abc_result[[col_producto, 'Subtotal Neto', 'PorcAcum', 'Categoria']].sort_values(by='Categoria'))
 
-        # Gráfico ABC
         graf_abc = alt.Chart(df_abc_result).mark_bar().encode(
             x=alt.X(col_producto, sort='-y'),
             y=alt.Y('Subtotal Neto', title='Subtotal Neto CLP'),
@@ -282,7 +296,6 @@ with tab3:
         for m in medidas:
             st.metric(m, formato_moneda(resumen_temp[m]) if m != 'Cantidad' else f"{int(resumen_temp[m]):,}".replace(",", "."))
 
-        # Gráfico ventas por producto en temporada
         ventas_temp_prod = df_filtrado[df_filtrado['Temporada'] == seleccion_temporada].groupby(col_producto)['Subtotal Neto'].sum().sort_values(ascending=False).reset_index()
         st.markdown("#### Top Productos en Temporada")
         graf_temp_prod = alt.Chart(ventas_temp_prod.head(10)).mark_bar().encode(
@@ -291,6 +304,4 @@ with tab3:
             tooltip=[alt.Tooltip('Subtotal Neto', format=",.0f")]
         ).properties(height=400)
         st.altair_chart(graf_temp_prod, use_container_width=True)
-
-
 
