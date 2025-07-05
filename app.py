@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import json
+import altair as alt
 
 st.set_page_config(page_title="Dashboard Botillería", layout="wide")
 st.title("📊 Dashboard de Ventas - Visión Propietario")
@@ -61,15 +62,13 @@ if not medidas:
     st.error("No se encontraron columnas de medidas importantes en el CSV.")
     st.stop()
 
-# --- Conversión de medidas a float ---
+# --- Convertir medidas a float ---
 for col in medidas:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-# --- Detectar sucursales únicas para lógica de filtros ---
-sucursales_disponibles = sorted(df[col_sucursal].dropna().unique().tolist())
-
 # --- Sidebar filtros ---
+sucursales_disponibles = sorted(df[col_sucursal].dropna().unique().tolist())
 st.sidebar.header("Filtros")
 
 if len(sucursales_disponibles) == 1:
@@ -79,32 +78,25 @@ else:
     sucursales = ["Todas"] + sucursales_disponibles
     seleccion_sucursal = st.sidebar.selectbox("Seleccionar Sucursal", sucursales)
 
-# Filtro tipo producto
 if col_tipo_producto:
     tipos_producto = ["Todos"] + sorted(df[col_tipo_producto].dropna().unique().tolist())
-    seleccion_tipo_producto = st.sidebar.selectbox("Seleccionar Tipo de Producto / Servicio", tipos_producto)
+    seleccion_tipo_producto = st.sidebar.selectbox("Tipo de Producto / Servicio", tipos_producto)
 else:
     seleccion_tipo_producto = None
 
-# Filtro productos dependiente de tipo
 df_para_productos = df.copy()
-if seleccion_tipo_producto and seleccion_tipo_producto != "Todos" and col_tipo_producto:
+if seleccion_tipo_producto and seleccion_tipo_producto != "Todos":
     df_para_productos = df_para_productos[df_para_productos[col_tipo_producto] == seleccion_tipo_producto]
 
 productos = ["Todos"] + sorted(df_para_productos[col_producto].dropna().unique().tolist())
-seleccion_producto = st.sidebar.selectbox("Seleccionar Producto", productos)
+seleccion_producto = st.sidebar.selectbox("Producto", productos)
 
-# Filtro mes
 meses = ["Todos"] + sorted(df[col_mes].dropna().unique().tolist())
-seleccion_mes = st.sidebar.selectbox("Seleccionar Mes", meses)
+seleccion_mes = st.sidebar.selectbox("Mes", meses)
 
 # --- Aplicar filtros ---
 df_filtrado = df.copy()
-
-if len(sucursales_disponibles) > 1:
-    if seleccion_sucursal != "Todas":
-        df_filtrado = df_filtrado[df_filtrado[col_sucursal] == seleccion_sucursal]
-else:
+if seleccion_sucursal != "Todas":
     df_filtrado = df_filtrado[df_filtrado[col_sucursal] == seleccion_sucursal]
 
 if seleccion_tipo_producto and seleccion_tipo_producto != "Todos":
@@ -120,7 +112,7 @@ if df_filtrado.empty:
     st.warning("No hay datos para los filtros seleccionados.")
     st.stop()
 
-# --- Función formato moneda robusta ---
+# --- Función formato CLP ---
 def formato_moneda(x):
     try:
         val = float(x)
@@ -130,7 +122,6 @@ def formato_moneda(x):
 
 # --- Resumen General ---
 st.markdown("## 📌 Resumen General")
-
 resumen = {m: df_filtrado[m].sum() for m in medidas}
 
 col1, col2, col3, col4, col5, col6 = st.columns(6)
@@ -141,30 +132,37 @@ col4.metric("Costo Neto", formato_moneda(resumen.get("Costo Neto", 0)))
 col5.metric("Impuestos", formato_moneda(resumen.get("Impuestos", 0)))
 col6.metric("Cantidad Vendida", f"{int(resumen.get('Cantidad', 0)):,}".replace(",", "."))
 
-# --- Gráficos ---
+# --- Gráficos con ALTair y tooltips ---
 st.markdown("## 📈 Análisis por Mes")
 
-ventas_mes = df_filtrado.groupby(col_mes)["Subtotal Neto"].sum().sort_index()
-st.bar_chart(ventas_mes)
+df_grafico = df_filtrado.groupby(col_mes).agg({
+    "Subtotal Neto": "sum",
+    "Margen Neto": "sum",
+    "Cantidad": "sum"
+}).reset_index()
 
-margen_mes = df_filtrado.groupby(col_mes)["Margen Neto"].sum().sort_index()
-st.line_chart(margen_mes)
+# Formato CLP para tooltip
+df_grafico["Subtotal Neto CLP"] = df_grafico["Subtotal Neto"].apply(formato_moneda)
+df_grafico["Margen Neto CLP"] = df_grafico["Margen Neto"].apply(formato_moneda)
 
-if len(sucursales_disponibles) > 1:
-    st.markdown("## 🏪 Ventas por Sucursal")
-    ventas_suc = df_filtrado.groupby(col_sucursal)["Subtotal Neto"].sum().sort_values(ascending=False)
-    st.bar_chart(ventas_suc)
+# --- Gráfico Altair con tooltips ---
+bar = alt.Chart(df_grafico).mark_bar().encode(
+    x=alt.X(f"{col_mes}:O", title="Mes"),
+    y=alt.Y("Subtotal Neto:Q", title="Subtotal Neto (CLP)"),
+    tooltip=[
+        alt.Tooltip(f"{col_mes}:O", title="Mes"),
+        alt.Tooltip("Subtotal Neto CLP:N", title="Subtotal Neto"),
+        alt.Tooltip("Margen Neto CLP:N", title="Margen Neto"),
+        alt.Tooltip("Cantidad:Q", title="Cantidad Vendida")
+    ]
+).properties(
+    width=700,
+    height=400,
+    title="🟦 Subtotal Neto por Mes"
+)
 
-st.markdown("## 🛒 Top 10 Productos por Subtotal Neto")
-top_prod = df_filtrado.groupby(col_producto)["Subtotal Neto"].sum().sort_values(ascending=False).head(10)
-st.bar_chart(top_prod)
+st.altair_chart(bar, use_container_width=True)
 
-if col_tipo_producto:
-    st.markdown(f"## 📊 Ventas por Tipo de Producto / Servicio ({seleccion_tipo_producto or 'Todos'})")
-    ventas_tipo = df_filtrado.groupby(col_tipo_producto)["Subtotal Neto"].sum().sort_values(ascending=False)
-    st.bar_chart(ventas_tipo)
-
-# --- Tabla final ---
+# --- Tabla de detalle ---
 st.markdown("## 📋 Detalle de Ventas")
 st.dataframe(df_filtrado.sort_values(by="Subtotal Neto", ascending=False), use_container_width=True)
-
