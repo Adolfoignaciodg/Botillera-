@@ -60,11 +60,19 @@ if not medidas:
     st.error("No se encontraron columnas de medidas importantes en el CSV.")
     st.stop()
 
+# --- Detectar sucursales únicas para lógica de filtros ---
+sucursales_disponibles = sorted(df[col_sucursal].dropna().unique().tolist())
+
 # --- Sidebar filtros ---
 st.sidebar.header("Filtros")
 
-sucursales = ["Todas"] + sorted(df[col_sucursal].dropna().unique().tolist())
-seleccion_sucursal = st.sidebar.selectbox("Seleccionar Sucursal", sucursales)
+# Si solo hay una sucursal, la fijamos y no mostramos filtro
+if len(sucursales_disponibles) == 1:
+    seleccion_sucursal = sucursales_disponibles[0]
+    st.sidebar.markdown(f"**Sucursal:** {seleccion_sucursal}")
+else:
+    sucursales = ["Todas"] + sucursales_disponibles
+    seleccion_sucursal = st.sidebar.selectbox("Seleccionar Sucursal", sucursales)
 
 productos = ["Todos"] + sorted(df[col_producto].dropna().unique().tolist())
 seleccion_producto = st.sidebar.selectbox("Seleccionar Producto", productos)
@@ -75,7 +83,11 @@ seleccion_mes = st.sidebar.selectbox("Seleccionar Mes", meses)
 # --- Aplicar filtros ---
 df_filtrado = df.copy()
 
-if seleccion_sucursal != "Todas":
+if len(sucursales_disponibles) > 1:
+    if seleccion_sucursal != "Todas":
+        df_filtrado = df_filtrado[df_filtrado[col_sucursal] == seleccion_sucursal]
+else:
+    # Filtro automático por única sucursal
     df_filtrado = df_filtrado[df_filtrado[col_sucursal] == seleccion_sucursal]
 
 if seleccion_producto != "Todos":
@@ -124,10 +136,11 @@ st.bar_chart(ventas_mes)
 margen_mes = df_filtrado.groupby(col_mes)["Margen Neto"].sum().sort_index()
 st.line_chart(margen_mes)
 
-# Ventas por sucursal
-st.markdown("## 🏪 Ventas por Sucursal")
-ventas_suc = df_filtrado.groupby(col_sucursal)["Subtotal Neto"].sum().sort_values(ascending=False)
-st.bar_chart(ventas_suc)
+# Mostrar gráfico por sucursal solo si hay más de una
+if len(sucursales_disponibles) > 1:
+    st.markdown("## 🏪 Ventas por Sucursal")
+    ventas_suc = df_filtrado.groupby(col_sucursal)["Subtotal Neto"].sum().sort_values(ascending=False)
+    st.bar_chart(ventas_suc)
 
 # Top 10 productos por ventas
 st.markdown("## 🛒 Top 10 Productos por Subtotal Neto")
@@ -137,5 +150,4 @@ st.bar_chart(top_prod)
 # --- Tabla detallada ---
 st.markdown("## 📋 Detalle de Ventas")
 st.dataframe(df_filtrado.sort_values(by="Subtotal Neto", ascending=False), use_container_width=True)
-
 
