@@ -2,93 +2,134 @@ import streamlit as st
 import pandas as pd
 import json
 
-st.set_page_config(page_title="Dashboard Ventas", layout="wide")
-st.title("📊 Dashboard de Ventas - Botillería")
+st.set_page_config(page_title="Dashboard Botillería", layout="wide")
+st.title("📊 Dashboard de Ventas - Visión Propietario")
 
-# --- Leer JSON ---
+# --- Leer JSON config ---
 try:
     with open("report.json", "r", encoding="utf-8") as f:
         config = json.load(f)
 except Exception as e:
-    st.error(f"❌ Error leyendo JSON: {e}")
+    st.error(f"Error leyendo JSON: {e}")
     st.stop()
 
-# --- URL CSV ---
+# --- Obtener URL CSV ---
 csv_url = config.get("dataSource", {}).get("filename", "")
 if not csv_url:
-    st.error("❌ No se encontró URL CSV en JSON.")
+    st.error("No se encontró URL CSV en JSON.")
     st.stop()
 
-# --- Cargar CSV ---
+# --- Cargar datos CSV ---
 @st.cache_data
 def cargar_datos(url):
     try:
-        df = pd.read_csv(url, sep=None, engine='python')  # auto detecta sep
+        df = pd.read_csv(url, sep=None, engine='python')  # detecta separador
         df.columns = df.columns.str.strip()
         return df
     except Exception as e:
-        st.error(f"❌ Error cargando CSV: {e}")
+        st.error(f"Error cargando CSV: {e}")
         return pd.DataFrame()
 
 df = cargar_datos(csv_url)
 if df.empty:
-    st.warning("⚠️ CSV vacío o no cargado.")
+    st.warning("Archivo CSV vacío o no cargado.")
     st.stop()
 
-# --- Mostrar columnas en sidebar ---
-st.sidebar.markdown("### 🧾 Columnas en CSV:")
-st.sidebar.write(df.columns.tolist())
+# --- Detectar columnas clave ---
+cols = df.columns.tolist()
+def encontrar_col(busqueda):
+    busqueda = busqueda.lower()
+    for c in cols:
+        if busqueda in c.lower():
+            return c
+    return None
 
-# --- Detectar columnas con + ---
-nombres_esperados = {
-    "Sucursal": "+Sucursal",
-    "Producto / Servicio + Variante": "+Producto / Servicio + Variante",
-    "Mes": "+Mes"
-}
+col_sucursal = encontrar_col("sucursal")
+col_producto = encontrar_col("producto / servicio + variante")
+col_mes = encontrar_col("mes")
 
-# --- Aplicar filtro sucursal (si existe en config y en df) ---
-try:
-    expands = config.get("slice", {}).get("expands", {}).get("rows", [])
-    for item in expands:
-        for value in item.get("tuple", []):
-            sucursal_filtrar = value.split(".[")[1].replace("]", "").strip().lower()
-            col_sucursal = nombres_esperados["Sucursal"]
-            if col_sucursal in df.columns:
-                df = df[df[col_sucursal].str.lower() == sucursal_filtrar]
-except Exception as e:
-    st.warning(f"⚠️ No se pudo filtrar sucursal: {e}")
+medidas_esperadas = ["Subtotal Neto", "Subtotal Bruto", "Margen Neto", "Costo Neto", "Impuestos", "Cantidad"]
+medidas = [m for m in medidas_esperadas if m in cols]
 
-# --- Medidas (sin +) que existen en df ---
-medidas = ["Subtotal Neto", "Subtotal Bruto", "Margen Neto", "Costo Neto", "Impuestos", "Cantidad"]
-medidas_validas = [m for m in medidas if m in df.columns]
-
-# --- Columnas para agrupar ---
-columnas_agrupacion = [col for col in nombres_esperados.values() if col in df.columns]
-
-if not columnas_agrupacion:
-    st.warning("⚠️ No hay columnas para agrupar.")
+if not col_sucursal or not col_producto or not col_mes:
+    st.error("No se encontraron columnas clave para sucursal, producto o mes en el CSV.")
+    st.write("Columnas encontradas:", cols)
     st.stop()
 
-if not medidas_validas:
-    st.warning("⚠️ No hay medidas para agregar.")
+if not medidas:
+    st.error("No se encontraron columnas de medidas importantes en el CSV.")
     st.stop()
 
-# --- Agrupar ---
-try:
-    agrupado = df.groupby(columnas_agrupacion)[medidas_validas].sum().reset_index()
-except Exception as e:
-    st.error(f"❌ Error agrupando datos: {e}")
+# --- Sidebar filtros ---
+st.sidebar.header("Filtros")
+
+sucursales = ["Todas"] + sorted(df[col_sucursal].dropna().unique().tolist())
+seleccion_sucursal = st.sidebar.selectbox("Seleccionar Sucursal", sucursales)
+
+productos = ["Todos"] + sorted(df[col_producto].dropna().unique().tolist())
+seleccion_producto = st.sidebar.selectbox("Seleccionar Producto", productos)
+
+meses = ["Todos"] + sorted(df[col_mes].dropna().unique().tolist())
+seleccion_mes = st.sidebar.selectbox("Seleccionar Mes", meses)
+
+# --- Aplicar filtros ---
+df_filtrado = df.copy()
+
+if seleccion_sucursal != "Todas":
+    df_filtrado = df_filtrado[df_filtrado[col_sucursal] == seleccion_sucursal]
+
+if seleccion_producto != "Todos":
+    df_filtrado = df_filtrado[df_filtrado[col_producto] == seleccion_producto]
+
+if seleccion_mes != "Todos":
+    df_filtrado = df_filtrado[df_filtrado[col_mes] == seleccion_mes]
+
+if df_filtrado.empty:
+    st.warning("No hay datos para los filtros seleccionados.")
     st.stop()
 
-# --- Mostrar tabla ---
-st.markdown("### 📋 Tabla agrupada de ventas")
-st.dataframe(agrupado, use_container_width=True)
+# --- Resumen General ---
+st.markdown("## 📌 Resumen General")
 
-# --- Gráfico subtotal neto por mes ---
-if "+Mes" in agrupado.columns and "Subtotal Neto" in agrupado.columns:
-    st.markdown("### 📈 Subtotal Neto por Mes")
-    chart = agrupado.groupby("+Mes")["Subtotal Neto"].sum().sort_index()
-    st.bar_chart(chart)
-else:
-    st.info("ℹ️ No hay datos para gráfico de mes.")
+def formato_moneda(x):
+    return f"${x:,.0f}".replace(",", ".")
+
+resumen = {}
+for m in medidas:
+    total = df_filtrado[m].sum()
+    resumen[m] = total
+
+col1, col2, col3, col4, col5, col6 = st.columns(6)
+col1.metric("Subtotal Neto", formato_moneda(resumen.get("Subtotal Neto", 0)))
+col2.metric("Subtotal Bruto", formato_moneda(resumen.get("Subtotal Bruto", 0)))
+col3.metric("Margen Neto", formato_moneda(resumen.get("Margen Neto", 0)))
+col4.metric("Costo Neto", formato_moneda(resumen.get("Costo Neto", 0)))
+col5.metric("Impuestos", formato_moneda(resumen.get("Impuestos", 0)))
+col6.metric("Cantidad Vendida", f"{int(resumen.get('Cantidad', 0)):,}".replace(",", "."))
+
+# --- Gráficos ---
+
+st.markdown("## 📈 Análisis por Mes")
+
+# Ventas por mes (Subtotal Neto)
+ventas_mes = df_filtrado.groupby(col_mes)["Subtotal Neto"].sum().sort_index()
+st.bar_chart(ventas_mes)
+
+# Margen neto por mes
+margen_mes = df_filtrado.groupby(col_mes)["Margen Neto"].sum().sort_index()
+st.line_chart(margen_mes)
+
+# Ventas por sucursal
+st.markdown("## 🏪 Ventas por Sucursal")
+ventas_suc = df_filtrado.groupby(col_sucursal)["Subtotal Neto"].sum().sort_values(ascending=False)
+st.bar_chart(ventas_suc)
+
+# Top 10 productos por ventas
+st.markdown("## 🛒 Top 10 Productos por Subtotal Neto")
+top_prod = df_filtrado.groupby(col_producto)["Subtotal Neto"].sum().sort_values(ascending=False).head(10)
+st.bar_chart(top_prod)
+
+# --- Tabla detallada ---
+st.markdown("## 📋 Detalle de Ventas")
+st.dataframe(df_filtrado.sort_values(by="Subtotal Neto", ascending=False), use_container_width=True)
 
