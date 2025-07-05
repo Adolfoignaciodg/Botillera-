@@ -1,0 +1,100 @@
+{
+    "dataSource": {
+        "dataSourceType": "csv",
+        "filename": "https://s3.amazonaws.com/bsalereports/84792/DynamicSalesReportExport_caa533f6fbb84b2b9880935cfd09fd89c9778e9f.csv?824647546568"
+    },
+    "slice": {
+        "rows": [
+            {
+                "uniqueName": "Sucursal"
+            },
+            {
+                "uniqueName": "Producto / Servicio + Variante"
+            }
+        ],
+        "columns": [
+            {
+                "uniqueName": "Mes"
+            },
+            {
+                "uniqueName": "[Measures]"
+            }
+        ],
+        "measures": [
+            {
+                "uniqueName": "Subtotal Neto",
+                "aggregation": "sum",
+                "format": "currency"
+            },
+            {
+                "uniqueName": "Subtotal Bruto",
+                "aggregation": "sum",
+                "format": "currency"
+            },
+            {
+                "uniqueName": "Margen Neto",
+                "aggregation": "sum",
+                "format": "currency"
+            },
+            {
+                "uniqueName": "Costo Neto",
+                "aggregation": "sum",
+                "format": "currency"
+            },
+            {
+                "uniqueName": "Impuestos",
+                "aggregation": "sum",
+                "format": "currency"
+            },
+            {
+                "uniqueName": "Cantidad",
+                "aggregation": "sum",
+                "format": "qty"
+            }
+        ],
+        "expands": {
+            "rows": [
+                {
+                    "tuple": [
+                        "sucursal.[botilleria maria bonita]"
+                    ]
+                }
+            ]
+        }
+    },
+    "options": {
+        "grid": {
+            "showGrandTotals": "columns"
+        }
+    },
+    "formats": [
+        {
+            "name": "currency",
+            "thousandsSeparator": ".",
+            "decimalSeparator": ",",
+            "decimalPlaces": 0,
+            "maxDecimalPlaces": "0",
+            "maxSymbols": 20,
+            "currencySymbol": "$",
+            "currencySymbolAlign": "left",
+            "nullValue": "",
+            "infinityValue": "0",
+            "divideByZeroValue": "0",
+            "textAlign": "right",
+            "isPercent": false
+        },
+        {
+            "name": "qty",
+            "thousandsSeparator": ".",
+            "decimalSeparator": ",",
+            "maxSymbols": 20,
+            "currencySymbol": "",
+            "currencySymbolAlign": "left",
+            "nullValue": "",
+            "infinityValue": "0",
+            "divideByZeroValue": "0",
+            "textAlign": "right",
+            "isPercent": false
+        }
+    ]
+}
