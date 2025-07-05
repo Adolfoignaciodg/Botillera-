@@ -88,11 +88,16 @@ if df_filtrado.empty:
     st.warning("No hay datos para los filtros seleccionados.")
     st.stop()
 
+# --- Función formato moneda robusta ---
+def formato_moneda(x):
+    try:
+        val = float(x)
+        return f"${val:,.0f}".replace(",", ".")
+    except (ValueError, TypeError):
+        return "$0"
+
 # --- Resumen General ---
 st.markdown("## 📌 Resumen General")
-
-def formato_moneda(x):
-    return f"${x:,.0f}".replace(",", ".")
 
 resumen = {}
 for m in medidas:
@@ -132,4 +137,5 @@ st.bar_chart(top_prod)
 # --- Tabla detallada ---
 st.markdown("## 📋 Detalle de Ventas")
 st.dataframe(df_filtrado.sort_values(by="Subtotal Neto", ascending=False), use_container_width=True)
+
 
