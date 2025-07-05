@@ -3,6 +3,7 @@ import pandas as pd
 import json
 import altair as alt
 import re
+import datetime
 
 st.set_page_config(page_title="Dashboard Botillería", layout="wide")
 st.title("📊 Dashboard de Ventas - Visión Propietario")
@@ -162,6 +163,33 @@ orden_meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
 
 df_filtrado[col_mes] = pd.Categorical(df_filtrado[col_mes], categories=orden_meses, ordered=True)
 
+# --- Función para obtener tooltip con fecha completa ---
+def dia_semana_nombre(mes_nombre, dia_num):
+    meses_num = {
+        "enero": 1, "febrero": 2, "marzo": 3, "abril": 4,
+        "mayo": 5, "junio": 6, "julio": 7, "agosto": 8,
+        "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12
+    }
+    mes_num = meses_num.get(mes_nombre.lower())
+    if mes_num is None or pd.isna(dia_num):
+        return ""
+    try:
+        fecha = datetime.date(2025, mes_num, int(dia_num))  # año fijo
+        nombre_dia = fecha.strftime("%A").lower()
+        nombre_dia_es = {
+            "monday": "lunes",
+            "tuesday": "martes",
+            "wednesday": "miércoles",
+            "thursday": "jueves",
+            "friday": "viernes",
+            "saturday": "sábado",
+            "sunday": "domingo"
+        }
+        mes_nombre_minuscula = mes_nombre.lower()
+        return f"{nombre_dia_es.get(nombre_dia, nombre_dia)} {int(dia_num)} {mes_nombre_minuscula} 2025"
+    except:
+        return ""
+
 # --- Construcción de pestañas sin temporada ---
 tab1, tab2 = st.tabs(["Resumen y Gráficos", "Análisis ABC"])
 
@@ -179,7 +207,7 @@ with tab1:
     col6.metric("Cantidad Vendida", f"{int(resumen.get('Cantidad', 0)):,}".replace(",", "."))
 
     st.markdown("## 📈 Subtotal Neto por Mes")
-    graf1 = alt.Chart(df_filtrado).mark_bar().encode(
+    graf1 = alt.Chart(df_filtrado).mark_bar(color="#377eb8").encode(
         x=alt.X(col_mes, sort=orden_meses),
         y=alt.Y("sum(Subtotal Neto)", title="Subtotal Neto"),
         tooltip=[
@@ -199,7 +227,7 @@ with tab1:
     df_agrupado["Margen Neto Tooltip"] = df_agrupado["Margen Neto"].apply(formato_moneda)
     df_agrupado["Subtotal Neto Tooltip"] = df_agrupado["Subtotal Neto"].apply(formato_moneda)
 
-    graf2 = alt.Chart(df_agrupado).mark_line(point=True).encode(
+    graf2 = alt.Chart(df_agrupado).mark_line(point=True, color="#e41a1c").encode(
         x=alt.X(col_mes, sort=orden_meses, title="Mes"),
         y=alt.Y("Margen Neto", title="Margen Neto"),
         tooltip=[
@@ -212,7 +240,7 @@ with tab1:
     if len(sucursales_disponibles) > 1:
         st.markdown("## 🏪 Ventas por Sucursal")
         ventas_suc = df_filtrado.groupby(col_sucursal)["Subtotal Neto"].sum().sort_values(ascending=False).reset_index()
-        graf3 = alt.Chart(ventas_suc).mark_bar().encode(
+        graf3 = alt.Chart(ventas_suc).mark_bar(color="#4daf4a").encode(
             x=alt.X("Subtotal Neto:Q", title="Subtotal CLP"),
             y=alt.Y(f"{col_sucursal}:N", sort="-x"),
             tooltip=[alt.Tooltip("Subtotal Neto", format=",.0f")]
@@ -221,7 +249,7 @@ with tab1:
 
     st.markdown("## 🛒 Top 10 Productos por Subtotal Neto")
     top_prod = df_filtrado.groupby(col_producto)["Subtotal Neto"].sum().sort_values(ascending=False).head(10).reset_index()
-    graf4 = alt.Chart(top_prod).mark_bar().encode(
+    graf4 = alt.Chart(top_prod).mark_bar(color="#984ea3").encode(
         x=alt.X("Subtotal Neto:Q", title="Subtotal CLP"),
         y=alt.Y(f"{col_producto}:N", sort="-x"),
         tooltip=[alt.Tooltip("Subtotal Neto", format=",.0f")]
@@ -231,7 +259,7 @@ with tab1:
     if col_tipo_producto:
         st.markdown(f"## 📊 Subtotal por Tipo de Producto / Servicio ({seleccion_tipo_producto or 'Todos'})")
         ventas_tipo = df_filtrado.groupby(col_tipo_producto)["Subtotal Neto"].sum().sort_values(ascending=False).reset_index()
-        graf5 = alt.Chart(ventas_tipo).mark_bar().encode(
+        graf5 = alt.Chart(ventas_tipo).mark_bar(color="#ff7f00").encode(
             x=alt.X("Subtotal Neto:Q", title="Subtotal CLP"),
             y=alt.Y(f"{col_tipo_producto}:N", sort="-x"),
             tooltip=[alt.Tooltip("Subtotal Neto", format=",.0f")]
@@ -246,11 +274,15 @@ with tab1:
         df_dias_producto[col_dia] = pd.to_numeric(df_dias_producto[col_dia], errors='coerce')
         df_dias_producto = df_dias_producto.sort_values(col_dia)
 
-        graf_cantidad_dia = alt.Chart(df_dias_producto).mark_bar().encode(
+        # Crear tooltip con fecha completa
+        df_dias_producto["Tooltip Dia"] = df_dias_producto.apply(
+            lambda row: dia_semana_nombre(seleccion_mes, row[col_dia]), axis=1)
+
+        graf_cantidad_dia = alt.Chart(df_dias_producto).mark_bar(color="#66c2a5").encode(
             x=alt.X(f"{col_dia}:O", title="Día del Mes"),
             y=alt.Y("Cantidad", title="Cantidad Vendida"),
             tooltip=[
-                alt.Tooltip(f"{col_dia}", title="Día"),
+                alt.Tooltip("Tooltip Dia", title="Fecha"),
                 alt.Tooltip("Cantidad", format=",.0f", title="Cantidad")
             ]
         ).properties(height=400)
@@ -290,4 +322,3 @@ with tab2:
             ]
         ).properties(height=400)
         st.altair_chart(graf_abc, use_container_width=True)
-
