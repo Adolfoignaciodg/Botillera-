@@ -182,6 +182,13 @@ def calcular_abc(df_abc, valor_col='Subtotal Neto', grupo_col=col_producto):
     df_abc['Categoria'] = pd.cut(df_abc['PorcAcum'], bins=[0, 0.7, 0.9, 1], labels=choices, include_lowest=True)
     return df_abc
 
+# --- Definir orden meses para gráfico ---
+orden_meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
+               "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+
+# Convertir columna mes a tipo categórico ordenado
+df_filtrado[col_mes] = pd.Categorical(df_filtrado[col_mes], categories=orden_meses, ordered=True)
+
 # --- Pestañas ---
 tab1, tab2, tab3 = st.tabs(["Resumen y Gráficos", "Análisis ABC", "Análisis por Temporada"])
 
@@ -200,7 +207,7 @@ with tab1:
     # --- Gráficos con Altair ---
     st.markdown("## 📈 Subtotal Neto por Mes")
     graf1 = alt.Chart(df_filtrado).mark_bar().encode(
-        x=alt.X(col_mes, sort="ascending"),
+        x=alt.X(col_mes, sort=orden_meses),
         y=alt.Y("sum(Subtotal Neto)", title="Subtotal Neto"),
         tooltip=[
             alt.Tooltip("sum(Subtotal Neto)", title="Subtotal CLP", format=",.0f"),
@@ -211,12 +218,25 @@ with tab1:
     st.altair_chart(graf1, use_container_width=True)
 
     st.markdown("## 📉 Margen Neto por Mes")
-    graf2 = alt.Chart(df_filtrado).mark_line(point=True).encode(
-        x=alt.X(col_mes, sort="ascending"),
-        y=alt.Y("sum(Margen Neto)", title="Margen Neto"),
+
+    # Agrupar datos para tooltip formateado
+    df_agrupado = df_filtrado.groupby(col_mes).agg({
+        "Margen Neto": "sum",
+        "Subtotal Neto": "sum"
+    }).reset_index()
+
+    def formatear_clp(valor):
+        return f"${int(valor):,}".replace(",", ".")
+
+    df_agrupado["Margen Neto Tooltip"] = df_agrupado["Margen Neto"].apply(formatear_clp)
+    df_agrupado["Subtotal Neto Tooltip"] = df_agrupado["Subtotal Neto"].apply(formatear_clp)
+
+    graf2 = alt.Chart(df_agrupado).mark_line(point=True).encode(
+        x=alt.X(col_mes, sort=orden_meses, title="Mes"),
+        y=alt.Y("Margen Neto", title="Margen Neto"),
         tooltip=[
-            alt.Tooltip("sum(Margen Neto)", format=",.0f"),
-            alt.Tooltip("sum(Subtotal Neto)", format=",.0f")
+            alt.Tooltip("Margen Neto Tooltip", title="Margen CLP"),
+            alt.Tooltip("Subtotal Neto Tooltip", title="Subtotal CLP")
         ]
     ).properties(height=400)
     st.altair_chart(graf2, use_container_width=True)
@@ -304,4 +324,5 @@ with tab3:
             tooltip=[alt.Tooltip('Subtotal Neto', format=",.0f")]
         ).properties(height=400)
         st.altair_chart(graf_temp_prod, use_container_width=True)
+
 
