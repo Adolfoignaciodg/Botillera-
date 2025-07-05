@@ -322,3 +322,4 @@ with tab2:
             ]
         ).properties(height=400)
         st.altair_chart(graf_abc, use_container_width=True)
+
