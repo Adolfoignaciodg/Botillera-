@@ -23,7 +23,7 @@ if not csv_url:
 @st.cache_data
 def cargar_datos(url):
     try:
-        df = pd.read_csv(url, sep=None, engine='python')  # detecta separador
+        df = pd.read_csv(url, sep=None, engine='python')
         df.columns = df.columns.str.strip()
         return df
     except Exception as e:
@@ -61,13 +61,17 @@ if not medidas:
     st.error("No se encontraron columnas de medidas importantes en el CSV.")
     st.stop()
 
+# --- Conversión de medidas a float ---
+for col in medidas:
+    if col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
 # --- Detectar sucursales únicas para lógica de filtros ---
 sucursales_disponibles = sorted(df[col_sucursal].dropna().unique().tolist())
 
 # --- Sidebar filtros ---
 st.sidebar.header("Filtros")
 
-# Filtro sucursal
 if len(sucursales_disponibles) == 1:
     seleccion_sucursal = sucursales_disponibles[0]
     st.sidebar.markdown(f"**Sucursal:** {seleccion_sucursal}")
@@ -75,14 +79,14 @@ else:
     sucursales = ["Todas"] + sucursales_disponibles
     seleccion_sucursal = st.sidebar.selectbox("Seleccionar Sucursal", sucursales)
 
-# Filtro tipo producto si existe
+# Filtro tipo producto
 if col_tipo_producto:
     tipos_producto = ["Todos"] + sorted(df[col_tipo_producto].dropna().unique().tolist())
     seleccion_tipo_producto = st.sidebar.selectbox("Seleccionar Tipo de Producto / Servicio", tipos_producto)
 else:
     seleccion_tipo_producto = None
 
-# Filtrar productos para llenar el filtro productos DEPENDIENTE del tipo producto seleccionado
+# Filtro productos dependiente de tipo
 df_para_productos = df.copy()
 if seleccion_tipo_producto and seleccion_tipo_producto != "Todos" and col_tipo_producto:
     df_para_productos = df_para_productos[df_para_productos[col_tipo_producto] == seleccion_tipo_producto]
@@ -121,16 +125,13 @@ def formato_moneda(x):
     try:
         val = float(x)
         return f"${val:,.0f}".replace(",", ".")
-    except (ValueError, TypeError):
+    except:
         return "$0"
 
 # --- Resumen General ---
 st.markdown("## 📌 Resumen General")
 
-resumen = {}
-for m in medidas:
-    total = df_filtrado[m].sum()
-    resumen[m] = total
+resumen = {m: df_filtrado[m].sum() for m in medidas}
 
 col1, col2, col3, col4, col5, col6 = st.columns(6)
 col1.metric("Subtotal Neto", formato_moneda(resumen.get("Subtotal Neto", 0)))
@@ -163,6 +164,7 @@ if col_tipo_producto:
     ventas_tipo = df_filtrado.groupby(col_tipo_producto)["Subtotal Neto"].sum().sort_values(ascending=False)
     st.bar_chart(ventas_tipo)
 
+# --- Tabla final ---
 st.markdown("## 📋 Detalle de Ventas")
 st.dataframe(df_filtrado.sort_values(by="Subtotal Neto", ascending=False), use_container_width=True)
 
