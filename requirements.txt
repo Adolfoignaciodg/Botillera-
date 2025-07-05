@@ -1,4 +1,3 @@
-json
 streamlit
 pandas
 openpyxl
