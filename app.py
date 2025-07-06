@@ -179,7 +179,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.markdown("## 📌 Resumen General")
     resumen = {m: df_filtrado[m].sum() for m in medidas}
-    cols_metrics = st.columns(len(medidas))
+    cols_metrics = st.columns([1.5 if m != 'Cantidad' else 1 for m in medidas])
     for idx, m in enumerate(medidas):
         valor = resumen.get(m, 0)
         display_val = f"{int(valor):,}".replace(",", ".") if m == 'Cantidad' else formato_moneda(valor)
