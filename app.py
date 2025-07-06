@@ -288,6 +288,10 @@ with tab1:
         ).properties(height=400)
         st.altair_chart(graf_cantidad_dia, use_container_width=True)
 
+        # --- NUEVO: Mostrar resumen numérico junto al gráfico ---
+        st.markdown("### 🧾 Resumen de Cantidad Vendida por Día")
+        st.dataframe(df_dias_producto[[col_dia, "Cantidad"]].rename(columns={col_dia:"Día del Mes", "Cantidad":"Cantidad Vendida"}).reset_index(drop=True), use_container_width=True)
+
     # --- Tabla detalle ---
     st.markdown("## 📋 Detalle de Ventas")
     st.dataframe(df_filtrado.sort_values(by="Subtotal Neto", ascending=False), use_container_width=True)
