@@ -6,11 +6,6 @@ import altair as alt
 st.set_page_config(page_title="Dashboard Botillería", layout="wide")
 st.title("📊 Dashboard de Ventas - Visión Propietario")
 
-# --- Botón para refrescar datos ---
-if st.sidebar.button("🔄 Actualizar datos"):
-    st.cache_data.clear()
-    st.experimental_rerun()
-
 # --- Leer JSON config ---
 try:
     with open("report.json", "r", encoding="utf-8") as f:
@@ -25,8 +20,8 @@ if not csv_url:
     st.error("No se encontró URL CSV en JSON.")
     st.stop()
 
-# --- Cargar datos CSV con caché que expira cada 10 minutos ---
-@st.cache_data(ttl=600)
+# --- Cargar datos CSV ---
+@st.cache_data
 def cargar_datos(url):
     try:
         df = pd.read_csv(url, sep=None, engine='python')
@@ -241,14 +236,13 @@ with tab1:
         ).properties(height=400)
         st.altair_chart(graf5, use_container_width=True)
 
+    # --- Cantidad diaria ---
     if seleccion_mes != "Todos" and seleccion_producto != "Todos" and col_dia and col_dia in df_filtrado.columns:
         st.markdown(f"## 🗕️ Cantidad Vendida por Día para '{seleccion_producto}' en {seleccion_mes.capitalize()}")
-
         df_producto_mes = df_filtrado[(df_filtrado[col_producto] == seleccion_producto) & (df_filtrado[col_mes] == seleccion_mes)]
         df_dias_producto = df_producto_mes.groupby(col_dia).agg({"Cantidad": "sum"}).reset_index()
         df_dias_producto[col_dia] = pd.to_numeric(df_dias_producto[col_dia], errors='coerce')
         df_dias_producto = df_dias_producto.sort_values(col_dia)
-
         graf_cantidad_dia = alt.Chart(df_dias_producto).mark_bar().encode(
             x=alt.X(f"{col_dia}:O", title="Día del Mes"),
             y=alt.Y("Cantidad", title="Cantidad Vendida"),
@@ -257,7 +251,6 @@ with tab1:
                 alt.Tooltip("Cantidad", format=",.0f", title="Cantidad")
             ]
         ).properties(height=400)
-
         st.altair_chart(graf_cantidad_dia, use_container_width=True)
 
     st.markdown("## 📋 Detalle de Ventas")
@@ -265,26 +258,21 @@ with tab1:
 
 with tab2:
     st.markdown("## 🔍 Análisis ABC de Productos")
-
     opcion_abc = st.radio("Ver análisis ABC por:", ("Total", "Por Mes"))
-
     if opcion_abc == "Total":
         df_abc = df_filtrado.copy()
     else:
         mes_abc = st.selectbox("Seleccionar Mes para ABC", meses[1:])
         df_abc = df_filtrado[df_filtrado[col_mes] == mes_abc]
-
     if df_abc.empty:
         st.warning("No hay datos para esta selección.")
     else:
         df_abc_result = calcular_abc(df_abc)
         st.dataframe(df_abc_result[[col_producto, 'Subtotal Neto', 'PorcAcum', 'Categoria']].sort_values(by='Categoria'))
-
         graf_abc = alt.Chart(df_abc_result).mark_bar().encode(
             x=alt.X(col_producto, sort='-y'),
             y=alt.Y('Subtotal Neto', title='Subtotal Neto CLP'),
-            color=alt.Color('Categoria', scale=alt.Scale(domain=['A', 'B', 'C'],
-                                                        range=['#1f77b4', '#ff7f0e', '#2ca02c'])),
+            color=alt.Color('Categoria', scale=alt.Scale(domain=['A', 'B', 'C'], range=['#1f77b4', '#ff7f0e', '#2ca02c'])),
             tooltip=[
                 alt.Tooltip(col_producto, title='Producto'),
                 alt.Tooltip('Subtotal Neto', format=",.0f"),
