@@ -268,40 +268,39 @@ with tab1:
 
     # --- Cantidad diaria para producto y mes seleccionados ---
     if seleccion_mes != "Todos" and col_dia and col_dia in df_filtrado.columns:
-    st.markdown(f"## 📅 Cantidad Vendida por Día para {'' if seleccion_producto == 'Todos' else f'\'{seleccion_producto}\''} en {seleccion_mes.capitalize()}")
-    
-    # Filtrar para día según producto o tipo producto o todos
-    if seleccion_producto != "Todos":
-        df_producto_mes = df_filtrado[(df_filtrado[col_producto] == seleccion_producto) & (df_filtrado[col_mes] == seleccion_mes)]
-    elif seleccion_tipo_producto and seleccion_tipo_producto != "Todos":
-        df_producto_mes = df_filtrado[(df_filtrado[col_tipo_producto] == seleccion_tipo_producto) & (df_filtrado[col_mes] == seleccion_mes)]
-    else:
-        df_producto_mes = df_filtrado[df_filtrado[col_mes] == seleccion_mes]
+        st.markdown(f"## 📅 Cantidad Vendida por Día para "
+                    f"{'' if seleccion_producto == 'Todos' else f'\'{seleccion_producto}\''} "
+                    f"en {seleccion_mes.capitalize()}")
 
-    df_dias_producto = df_producto_mes.groupby(col_dia).agg({"Cantidad": "sum"}).reset_index()
-    df_dias_producto[col_dia] = pd.to_numeric(df_dias_producto[col_dia], errors='coerce')
-    df_dias_producto = df_dias_producto.sort_values(col_dia)
+        if seleccion_producto != "Todos":
+            df_producto_mes = df_filtrado[(df_filtrado[col_producto] == seleccion_producto) & (df_filtrado[col_mes] == seleccion_mes)]
+        elif seleccion_tipo_producto and seleccion_tipo_producto != "Todos":
+            df_producto_mes = df_filtrado[(df_filtrado[col_tipo_producto] == seleccion_tipo_producto) & (df_filtrado[col_mes] == seleccion_mes)]
+        else:
+            df_producto_mes = df_filtrado[df_filtrado[col_mes] == seleccion_mes]
 
-    df_dias_producto["Tooltip Dia"] = df_dias_producto.apply(
-        lambda row: dia_semana_nombre(seleccion_mes, row[col_dia]), axis=1)
+        df_dias_producto = df_producto_mes.groupby(col_dia).agg({"Cantidad": "sum"}).reset_index()
+        df_dias_producto[col_dia] = pd.to_numeric(df_dias_producto[col_dia], errors='coerce')
+        df_dias_producto = df_dias_producto.sort_values(col_dia)
 
-    graf_cantidad_dia = alt.Chart(df_dias_producto).mark_bar(color="#66c2a5").encode(
-        x=alt.X(f"{col_dia}:O", title="Día del Mes"),
-        y=alt.Y("Cantidad", title="Cantidad Vendida"),
-        tooltip=[
-            alt.Tooltip("Tooltip Dia", title="Fecha"),
-            alt.Tooltip("Cantidad", format=",.0f", title="Cantidad")
-        ]
-    ).properties(height=400)
-    st.altair_chart(graf_cantidad_dia, use_container_width=True)
+        df_dias_producto["Tooltip Dia"] = df_dias_producto.apply(
+            lambda row: dia_semana_nombre(seleccion_mes, row[col_dia]), axis=1)
 
-    st.markdown("### 🧾 Resumen de Cantidad Vendida por Día")
-    st.dataframe(df_dias_producto[[col_dia, "Cantidad"]].rename(columns={col_dia:"Día del Mes", "Cantidad":"Cantidad Vendida"}).reset_index(drop=True), use_container_width=True)
+        graf_cantidad_dia = alt.Chart(df_dias_producto).mark_bar(color="#66c2a5").encode(
+            x=alt.X(f"{col_dia}:O", title="Día del Mes"),
+            y=alt.Y("Cantidad", title="Cantidad Vendida"),
+            tooltip=[
+                alt.Tooltip("Tooltip Dia", title="Fecha"),
+                alt.Tooltip("Cantidad", format=",.0f", title="Cantidad")
+            ]
+        ).properties(height=400)
+        st.altair_chart(graf_cantidad_dia, use_container_width=True)
 
-
-        # --- Mostrar resumen numérico junto al gráfico ---
         st.markdown("### 🧾 Resumen de Cantidad Vendida por Día")
-        st.dataframe(df_dias_producto[[col_dia, "Cantidad"]].rename(columns={col_dia:"Día del Mes", "Cantidad":"Cantidad Vendida"}).reset_index(drop=True), use_container_width=True)
+        st.dataframe(df_dias_producto[[col_dia, "Cantidad"]]
+                     .rename(columns={col_dia:"Día del Mes", "Cantidad":"Cantidad Vendida"})
+                     .reset_index(drop=True),
+                     use_container_width=True)
 
     # --- Tabla detalle ---
     st.markdown("## 📋 Detalle de Ventas")
@@ -337,3 +336,4 @@ with tab2:
             ]
         ).properties(height=400)
         st.altair_chart(graf_abc, use_container_width=True)
+
