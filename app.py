@@ -190,7 +190,7 @@ def dia_semana_nombre(mes_nombre, dia_num):
     except:
         return ""
 
-# --- Construcción de pestañas sin temporada ---
+# --- Construcción de pestañas ---
 tab1, tab2 = st.tabs(["Resumen y Gráficos", "Análisis ABC"])
 
 with tab1:
@@ -288,7 +288,7 @@ with tab1:
         ).properties(height=400)
         st.altair_chart(graf_cantidad_dia, use_container_width=True)
 
-        # --- NUEVO: Mostrar resumen numérico junto al gráfico ---
+        # --- Mostrar resumen numérico junto al gráfico ---
         st.markdown("### 🧾 Resumen de Cantidad Vendida por Día")
         st.dataframe(df_dias_producto[[col_dia, "Cantidad"]].rename(columns={col_dia:"Día del Mes", "Cantidad":"Cantidad Vendida"}).reset_index(drop=True), use_container_width=True)
 
@@ -326,4 +326,3 @@ with tab2:
             ]
         ).properties(height=400)
         st.altair_chart(graf_abc, use_container_width=True)
-
