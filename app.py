@@ -27,9 +27,14 @@ if not csv_url:
     st.error("No se encontró URL CSV en JSON.")
     st.stop()
 
+# --- Obtener URL catálogo desde JSON ---
+catalogo_url = config.get("catalogoProductos", {}).get("url", "")
+if not catalogo_url:
+    st.warning("No se encontró URL del catálogo en JSON, la pestaña de productos repetidos no funcionará.")
+
 # --- Función para cargar datos CSV con cache ---
 @st.cache_data(show_spinner=False)
-def cargar_datos(url):
+def cargar_datos_csv(url):
     try:
         df = pd.read_csv(url, sep=None, engine='python')
         df.columns = df.columns.str.strip()
@@ -38,10 +43,25 @@ def cargar_datos(url):
         st.error(f"Error cargando CSV: {e}")
         return pd.DataFrame()
 
-df = cargar_datos(csv_url)
+df = cargar_datos_csv(csv_url)
 if df.empty:
     st.warning("Archivo CSV vacío o no cargado.")
     st.stop()
+
+# --- Función para cargar catálogo Excel con cache ---
+@st.cache_data(show_spinner=False)
+def cargar_catalogo_excel(url):
+    try:
+        df_cat = pd.read_excel(url)
+        df_cat.columns = df_cat.columns.str.strip()
+        return df_cat
+    except Exception as e:
+        st.error(f"Error cargando catálogo Excel: {e}")
+        return pd.DataFrame()
+
+df_catalogo = pd.DataFrame()
+if catalogo_url:
+    df_catalogo = cargar_catalogo_excel(catalogo_url)
 
 # --- Detectar columnas clave ---
 cols = df.columns.tolist()
@@ -149,7 +169,12 @@ def formato_moneda(x):
         return "$0"
 
 # --- Pestañas ---
-tab1, tab2, tab3 = st.tabs(["Resumen y Detalle", "Análisis ABC", "Detalle por Día y Categoría"])
+tab1, tab2, tab3, tab4 = st.tabs([
+    "Resumen y Detalle",
+    "Análisis ABC",
+    "Detalle por Día y Categoría",
+    "🧾 Productos Repetidos / No Registrados"
+])
 
 with tab1:
     st.markdown("## 📌 Resumen General")
@@ -202,7 +227,6 @@ with tab1:
 with tab2:
     st.markdown("## 🔍 Análisis ABC de Productos")
 
-    # Elimino opción "Por Mes", solo "Total"
     df_abc = df_filtrado.copy()
 
     if df_abc.empty:
@@ -256,7 +280,6 @@ with tab3:
     if df_detalle_fecha.empty:
         st.warning("No hay datos para la fecha seleccionada.")
     else:
-        # Ordenar por categoría (si existe) y producto
         ordenar_por = []
         if col_tipo_producto:
             ordenar_por.append(col_tipo_producto)
@@ -276,4 +299,55 @@ with tab3:
             cols_mostrar = [col_producto, 'Cantidad', 'Subtotal Neto']
             cols_mostrar = [c for c in cols_mostrar if c in df_cat.columns]
             st.dataframe(df_cat[cols_mostrar], use_container_width=True)
+
+with tab4:
+    st.markdown("## 🧾 Productos Repetidos y No Registrados")
+
+    if df_catalogo.empty:
+        st.warning("No se pudo cargar el catálogo. Por favor revisa la URL en report.json")
+    else:
+        # Columnas clave en catálogo (ajustar si cambia el formato)
+        col_nom_prod = None
+        col_sku = None
+        for c in df_catalogo.columns:
+            if "nombre" in c.lower():
+                col_nom_prod = c
+            if "sku" in c.lower():
+                col_sku = c
+
+        if not col_nom_prod:
+            st.error("No se encontró columna 'Nombre del Producto' en el catálogo.")
+        else:
+            st.write("### Productos con nombres duplicados en catálogo:")
+            dup_nombres = df_catalogo[df_catalogo.duplicated(subset=[col_nom_prod], keep=False)]
+            st.dataframe(dup_nombres.sort_values(col_nom_prod), use_container_width=True)
+
+        if col_sku:
+            st.write("### Productos con SKU duplicados en catálogo:")
+            dup_skus = df_catalogo[df_catalogo.duplicated(subset=[col_sku], keep=False)]
+            st.dataframe(dup_skus.sort_values(col_sku), use_container_width=True)
+
+        # Productos vendidos en CSV no encontrados en catálogo por nombre
+        st.write("### Productos vendidos que NO están en el catálogo (por nombre):")
+        nombres_catalogo = df_catalogo[col_nom_prod].dropna().str.strip().str.lower().unique()
+        nombres_ventas = df[col_producto].dropna().str.strip().str.lower().unique()
+        productos_no_catalogo = sorted(set(nombres_ventas) - set(nombres_catalogo))
+        if productos_no_catalogo:
+            st.dataframe(pd.DataFrame(productos_no_catalogo, columns=["Producto vendido no registrado"]))
+        else:
+            st.success("Todos los productos vendidos están registrados en el catálogo.")
+
+        # Opcional: productos vendidos que no estén en catálogo por SKU (si tienes esa columna en ventas)
+        if col_sku:
+            # Buscar columna SKU en ventas (similar método encontrar_col)
+            col_sku_ventas = encontrar_col("sku")
+            if col_sku_ventas:
+                st.write("### Productos vendidos con SKU que NO están en el catálogo:")
+                skus_catalogo = df_catalogo[col_sku].dropna().astype(str).str.strip().unique()
+                skus_ventas = df[col_sku_ventas].dropna().astype(str).str.strip().unique()
+                skus_no_catalogo = sorted(set(skus_ventas) - set(skus_catalogo))
+                if skus_no_catalogo:
+                    st.dataframe(pd.DataFrame(skus_no_catalogo, columns=["SKU vendido no registrado"]))
+                else:
+                    st.success("Todos los SKUs vendidos están registrados en el catálogo.")
 
