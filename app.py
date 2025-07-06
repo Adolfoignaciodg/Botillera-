@@ -268,10 +268,10 @@ with tab1:
 
     # --- Cantidad diaria para producto y mes seleccionados ---
     if seleccion_mes != "Todos" and col_dia and col_dia in df_filtrado.columns:
-        st.markdown(f"## 📅 Cantidad Vendida por Día para "
-                    f"{'' if seleccion_producto == 'Todos' else f'\'{seleccion_producto}\''} "
-                    f"en {seleccion_mes.capitalize()}")
+        producto_str = "" if seleccion_producto == "Todos" else f"'{seleccion_producto}'"
+        st.markdown(f"## 📅 Cantidad Vendida por Día para {producto_str} en {seleccion_mes.capitalize()}")
 
+        # Filtrar para día según producto o tipo producto o todos
         if seleccion_producto != "Todos":
             df_producto_mes = df_filtrado[(df_filtrado[col_producto] == seleccion_producto) & (df_filtrado[col_mes] == seleccion_mes)]
         elif seleccion_tipo_producto and seleccion_tipo_producto != "Todos":
@@ -336,4 +336,3 @@ with tab2:
             ]
         ).properties(height=400)
         st.altair_chart(graf_abc, use_container_width=True)
-
