@@ -83,6 +83,12 @@ for col in medidas:
 # Convertir columna fecha a datetime
 df[col_fecha] = pd.to_datetime(df[col_fecha], errors='coerce')
 
+# Extraer Año, Mes (numérico y nombre) y Día para filtros en nueva pestaña
+df['Año'] = df[col_fecha].dt.year
+df['MesNum'] = df[col_fecha].dt.month
+df['MesNombre'] = df[col_fecha].dt.strftime('%B')
+df['Día'] = df[col_fecha].dt.day
+
 # --- Detectar sucursales únicas para filtros ---
 sucursales_disponibles = sorted(df[col_sucursal].dropna().unique())
 
@@ -143,7 +149,7 @@ def formato_moneda(x):
         return "$0"
 
 # --- Pestañas ---
-tab1, tab2 = st.tabs(["Resumen y Detalle", "Análisis ABC"])
+tab1, tab2, tab3 = st.tabs(["Resumen y Detalle", "Análisis ABC", "Detalle por Día y Categoría"])
 
 with tab1:
     st.markdown("## 📌 Resumen General")
@@ -164,17 +170,13 @@ with tab1:
     cantidades_por_producto = df_cantidades.groupby(col_producto)['Cantidad'].sum().reset_index().sort_values(by='Cantidad', ascending=False)
     st.dataframe(cantidades_por_producto, use_container_width=True)
 
-    # Tabla pivote detalle diario con productos en filas y fechas en columnas
     st.markdown(f"## 📅 Detalle Diario de Ventas " +
                 (f"para producto '{seleccion_producto}'" if seleccion_producto != "Todos" else "para todos los productos"))
 
     if seleccion_producto == "Todos":
         detalle_diario = df_filtrado.groupby([col_producto, col_fecha])['Cantidad'].sum().reset_index()
         pivot_diario = detalle_diario.pivot(index=col_producto, columns=col_fecha, values='Cantidad').fillna(0)
-
-        # Formatear columnas fecha DD/MM/AAAA
         pivot_diario.columns = pivot_diario.columns.strftime('%d/%m/%Y')
-
         st.dataframe(pivot_diario.astype(int), use_container_width=True)
 
         prod_para_graf = st.selectbox("Seleccionar Producto para gráfico diario", ["Todos"] + sorted(detalle_diario[col_producto].unique()))
@@ -186,7 +188,6 @@ with tab1:
                 tooltip=[alt.Tooltip(col_fecha, title="Fecha", format='%d/%m/%Y'), alt.Tooltip('Cantidad')]
             ).properties(height=300)
             st.altair_chart(graf_diario, use_container_width=True)
-
     else:
         detalle_diario = df_filtrado.groupby(col_fecha)['Cantidad'].sum().reset_index().sort_values(col_fecha)
         st.dataframe(detalle_diario, use_container_width=True)
@@ -201,13 +202,8 @@ with tab1:
 with tab2:
     st.markdown("## 🔍 Análisis ABC de Productos")
 
-    opcion_abc = st.radio("Ver análisis ABC por:", ("Total", "Por Mes"))
-
-    if opcion_abc == "Total":
-        df_abc = df_filtrado.copy()
-    else:
-        mes_abc = st.selectbox("Seleccionar Mes para ABC", meses[1:])
-        df_abc = df_filtrado[df_filtrado[col_mes] == mes_abc]
+    # Elimino opción "Por Mes", solo "Total"
+    df_abc = df_filtrado.copy()
 
     if df_abc.empty:
         st.warning("No hay datos para esta selección.")
@@ -237,3 +233,47 @@ with tab2:
             ]
         ).properties(height=400)
         st.altair_chart(graf_abc, use_container_width=True)
+
+with tab3:
+    st.markdown("## 📋 Detalle de Ventas por Día y Categoría")
+
+    años_disponibles = sorted(df['Año'].dropna().unique())
+    año_seleccionado = st.selectbox("Seleccionar Año", años_disponibles)
+
+    meses_disponibles = df[df['Año'] == año_seleccionado][['MesNum', 'MesNombre']].drop_duplicates().sort_values('MesNum')
+    mes_seleccionado = st.selectbox("Seleccionar Mes", meses_disponibles['MesNombre'].tolist())
+
+    dias_disponibles = df[(df['Año'] == año_seleccionado) & (df['MesNombre'] == mes_seleccionado)]['Día'].dropna().unique()
+    dias_disponibles = sorted(dias_disponibles)
+    dia_seleccionado = st.selectbox("Seleccionar Día", dias_disponibles)
+
+    df_detalle_fecha = df[
+        (df['Año'] == año_seleccionado) &
+        (df['MesNombre'] == mes_seleccionado) &
+        (df['Día'] == dia_seleccionado)
+    ]
+
+    if df_detalle_fecha.empty:
+        st.warning("No hay datos para la fecha seleccionada.")
+    else:
+        # Ordenar por categoría (si existe) y producto
+        ordenar_por = []
+        if col_tipo_producto:
+            ordenar_por.append(col_tipo_producto)
+        ordenar_por.append(col_producto)
+
+        df_detalle_fecha = df_detalle_fecha.sort_values(by=ordenar_por)
+
+        categorias_unicas = df_detalle_fecha[col_tipo_producto].dropna().unique() if col_tipo_producto else ["Sin Categoría"]
+
+        for cat in categorias_unicas:
+            st.markdown(f"### 📂 Categoría: {cat}")
+            if col_tipo_producto:
+                df_cat = df_detalle_fecha[df_detalle_fecha[col_tipo_producto] == cat]
+            else:
+                df_cat = df_detalle_fecha
+
+            cols_mostrar = [col_producto, 'Cantidad', 'Subtotal Neto']
+            cols_mostrar = [c for c in cols_mostrar if c in df_cat.columns]
+            st.dataframe(df_cat[cols_mostrar], use_container_width=True)
+
