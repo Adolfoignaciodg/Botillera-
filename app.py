@@ -306,24 +306,36 @@ with tab4:
     if df_catalogo.empty:
         st.warning("No se pudo cargar el catálogo. Por favor revisa la URL en report.json")
     else:
-        # Detectar columnas clave en catálogo
+        # Detectar columnas clave en catálogo: nombre, variante y SKU
         col_nom_prod = None
+        col_variante = None
         col_sku = None
         for c in df_catalogo.columns:
-            if "nombre" in c.lower():
+            c_lower = c.lower()
+            if "nombre" in c_lower:
                 col_nom_prod = c
-            if "sku" == c.lower():
+            if "variante" in c_lower:
+                col_variante = c
+            if "sku" == c_lower:
                 col_sku = c
 
         st.write(f"Columna nombre producto detectada en catálogo: {col_nom_prod}")
+        st.write(f"Columna variante detectada en catálogo: {col_variante}")
         st.write(f"Columna SKU detectada en catálogo: {col_sku}")
 
         if not col_nom_prod:
             st.error("No se encontró columna 'Nombre del Producto' en el catálogo.")
         else:
-            st.write("### Productos con nombres duplicados en catálogo:")
-            dup_nombres = df_catalogo[df_catalogo.duplicated(subset=[col_nom_prod], keep=False)]
-            st.dataframe(dup_nombres.sort_values(col_nom_prod), use_container_width=True)
+            # Para detectar duplicados se usa la combinación nombre + variante + sku (si existen)
+            columnas_para_duplicados = [col_nom_prod]
+            if col_variante:
+                columnas_para_duplicados.append(col_variante)
+            if col_sku:
+                columnas_para_duplicados.append(col_sku)
+
+            st.write("### Productos con nombres duplicados en catálogo (mismo nombre + variante + SKU):")
+            dup_nombres = df_catalogo[df_catalogo.duplicated(subset=columnas_para_duplicados, keep=False)]
+            st.dataframe(dup_nombres.sort_values(columnas_para_duplicados), use_container_width=True)
 
         if col_sku:
             st.write("### Productos con SKU duplicados en catálogo:")
@@ -352,5 +364,4 @@ with tab4:
                     st.dataframe(pd.DataFrame(skus_no_catalogo, columns=["SKU vendido no registrado"]))
                 else:
                     st.success("Todos los SKUs vendidos están registrados en el catálogo.")
-
 
