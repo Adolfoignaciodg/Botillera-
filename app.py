@@ -2,13 +2,11 @@ import streamlit as st
 import pandas as pd
 import json
 import altair as alt
-import re
-import datetime
 
 st.set_page_config(page_title="Dashboard Botillería", layout="wide")
 st.title("📊 Dashboard de Ventas - Visión Propietario")
 
-# --- Cargar configuración JSON ---
+# --- Leer JSON config ---
 try:
     with open("report.json", "r", encoding="utf-8") as f:
         config = json.load(f)
@@ -16,12 +14,13 @@ except Exception as e:
     st.error(f"Error leyendo JSON: {e}")
     st.stop()
 
+# --- Obtener URL CSV ---
 csv_url = config.get("dataSource", {}).get("filename", "")
 if not csv_url:
     st.error("No se encontró URL CSV en JSON.")
     st.stop()
 
-# --- Función para cargar datos ---
+# --- Cargar datos CSV ---
 @st.cache_data
 def cargar_datos(url):
     try:
@@ -37,9 +36,8 @@ if df.empty:
     st.warning("Archivo CSV vacío o no cargado.")
     st.stop()
 
-# --- Detectar columnas clave dinámicamente ---
+# --- Detectar columnas clave ---
 cols = df.columns.tolist()
-
 def encontrar_col(busqueda):
     busqueda = busqueda.lower()
     for c in cols:
@@ -53,11 +51,9 @@ col_mes = encontrar_col("mes")
 col_tipo_producto = encontrar_col("tipo de producto / servicio")
 col_dia = encontrar_col("día") or encontrar_col("dia")  # Para día
 
-# Medidas que se esperan en el dataset
 medidas_esperadas = ["Subtotal Neto", "Subtotal Bruto", "Margen Neto", "Costo Neto", "Impuestos", "Cantidad"]
 medidas = [m for m in medidas_esperadas if m in cols]
 
-# Validar columnas clave
 if not col_sucursal or not col_producto or not col_mes:
     st.error("No se encontraron columnas clave para sucursal, producto o mes en el CSV.")
     st.write("Columnas encontradas:", cols)
@@ -67,12 +63,12 @@ if not medidas:
     st.error("No se encontraron columnas de medidas importantes en el CSV.")
     st.stop()
 
-# --- Convertir columnas de medidas a numéricas ---
+# --- Conversión de medidas a float ---
 for col in medidas:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-# --- Normalizar columna Mes: convertir número a nombre y limpiar texto ---
+# --- Normalizar columna Mes ---
 def numero_a_mes(mes):
     m = str(mes).strip()
     if m.isdigit():
@@ -81,18 +77,35 @@ def numero_a_mes(mes):
             meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
                      "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
             return meses[n-1]
+    import re
     texto_sin_num = re.sub(r"^\d+\s*", "", m).lower()
     return texto_sin_num
 
 df[col_mes] = df[col_mes].apply(numero_a_mes)
 
-# --- Convertir día a numérico si existe ---
+# --- Temporada ---
+def mes_a_temporada(mes):
+    if mes in ['diciembre', 'enero', 'febrero']:
+        return 'Verano'
+    elif mes in ['marzo', 'abril', 'mayo']:
+        return 'Otoño'
+    elif mes in ['junio', 'julio', 'agosto']:
+        return 'Invierno'
+    elif mes in ['septiembre', 'octubre', 'noviembre']:
+        return 'Primavera'
+    else:
+        return 'Desconocida'
+
+df['Temporada'] = df[col_mes].apply(mes_a_temporada)
+
+# --- Día a numérico ---
 if col_dia and col_dia in df.columns:
     df[col_dia] = pd.to_numeric(df[col_dia], errors='coerce')
 
-# --- Preparar filtros del sidebar ---
+# --- Sucursales ---
 sucursales_disponibles = sorted(df[col_sucursal].dropna().unique().tolist())
 
+# --- Sidebar ---
 st.sidebar.header("Filtros")
 
 if len(sucursales_disponibles) == 1:
@@ -108,7 +121,6 @@ if col_tipo_producto:
 else:
     seleccion_tipo_producto = None
 
-# Filtrar productos según tipo seleccionado para mejorar UX
 df_para_productos = df.copy()
 if seleccion_tipo_producto and seleccion_tipo_producto != "Todos" and col_tipo_producto:
     df_para_productos = df_para_productos[df_para_productos[col_tipo_producto] == seleccion_tipo_producto]
@@ -119,7 +131,10 @@ seleccion_producto = st.sidebar.selectbox("Seleccionar Producto", productos)
 meses = ["Todos"] + sorted(df[col_mes].dropna().unique().tolist())
 seleccion_mes = st.sidebar.selectbox("Seleccionar Mes", meses)
 
-# --- Aplicar filtros a dataframe ---
+temporadas = ["Todas", "Verano", "Otoño", "Invierno", "Primavera"]
+seleccion_temporada = st.sidebar.selectbox("Seleccionar Temporada", temporadas)
+
+# --- Aplicar filtros ---
 df_filtrado = df.copy()
 
 if len(sucursales_disponibles) > 1 and seleccion_sucursal != "Todas":
@@ -134,11 +149,14 @@ if seleccion_producto != "Todos":
 if seleccion_mes != "Todos":
     df_filtrado = df_filtrado[df_filtrado[col_mes] == seleccion_mes]
 
+if seleccion_temporada != "Todas":
+    df_filtrado = df_filtrado[df_filtrado['Temporada'] == seleccion_temporada]
+
 if df_filtrado.empty:
     st.warning("No hay datos para los filtros seleccionados.")
     st.stop()
 
-# --- Función para formatear moneda chilena ---
+# --- Formato moneda ---
 def formato_moneda(x):
     try:
         val = float(x)
@@ -146,7 +164,7 @@ def formato_moneda(x):
     except:
         return "$0"
 
-# --- Función para cálculo ABC ---
+# --- Cálculo ABC ---
 def calcular_abc(df_abc, valor_col='Subtotal Neto', grupo_col=col_producto):
     df_abc = df_abc.groupby(grupo_col)[valor_col].sum().reset_index()
     df_abc = df_abc.sort_values(by=valor_col, ascending=False)
@@ -157,47 +175,17 @@ def calcular_abc(df_abc, valor_col='Subtotal Neto', grupo_col=col_producto):
     df_abc['Categoria'] = pd.cut(df_abc['PorcAcum'], bins=[0, 0.7, 0.9, 1], labels=choices, include_lowest=True)
     return df_abc
 
-# --- Orden definido para meses ---
+# --- Orden meses ---
 orden_meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
                "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
-
 df_filtrado[col_mes] = pd.Categorical(df_filtrado[col_mes], categories=orden_meses, ordered=True)
 
-# --- Función para obtener tooltip con fecha completa ---
-def dia_semana_nombre(mes_nombre, dia_num):
-    meses_num = {
-        "enero": 1, "febrero": 2, "marzo": 3, "abril": 4,
-        "mayo": 5, "junio": 6, "julio": 7, "agosto": 8,
-        "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12
-    }
-    mes_num = meses_num.get(mes_nombre.lower())
-    if mes_num is None or pd.isna(dia_num):
-        return ""
-    try:
-        fecha = datetime.date(2025, mes_num, int(dia_num))  # año fijo
-        nombre_dia = fecha.strftime("%A").lower()
-        nombre_dia_es = {
-            "monday": "lunes",
-            "tuesday": "martes",
-            "wednesday": "miércoles",
-            "thursday": "jueves",
-            "friday": "viernes",
-            "saturday": "sábado",
-            "sunday": "domingo"
-        }
-        mes_nombre_minuscula = mes_nombre.lower()
-        return f"{nombre_dia_es.get(nombre_dia, nombre_dia)} {int(dia_num)} {mes_nombre_minuscula} 2025"
-    except:
-        return ""
-
-# --- Construcción de pestañas sin temporada ---
-tab1, tab2 = st.tabs(["Resumen y Gráficos", "Análisis ABC"])
+# --- Pestañas ---
+tab1, tab2, tab3 = st.tabs(["Resumen y Gráficos", "Análisis ABC", "Análisis por Temporada"])
 
 with tab1:
     st.markdown("## 📌 Resumen General")
-
     resumen = {m: df_filtrado[m].sum() for m in medidas}
-
     col1, col2, col3, col4, col5, col6 = st.columns(6)
     col1.metric("Subtotal Neto", formato_moneda(resumen.get("Subtotal Neto", 0)))
     col2.metric("Subtotal Bruto", formato_moneda(resumen.get("Subtotal Bruto", 0)))
@@ -207,7 +195,7 @@ with tab1:
     col6.metric("Cantidad Vendida", f"{int(resumen.get('Cantidad', 0)):,}".replace(",", "."))
 
     st.markdown("## 📈 Subtotal Neto por Mes")
-    graf1 = alt.Chart(df_filtrado).mark_bar(color="#377eb8").encode(
+    graf1 = alt.Chart(df_filtrado).mark_bar().encode(
         x=alt.X(col_mes, sort=orden_meses),
         y=alt.Y("sum(Subtotal Neto)", title="Subtotal Neto"),
         tooltip=[
@@ -224,10 +212,13 @@ with tab1:
         "Subtotal Neto": "sum"
     }).reset_index()
 
-    df_agrupado["Margen Neto Tooltip"] = df_agrupado["Margen Neto"].apply(formato_moneda)
-    df_agrupado["Subtotal Neto Tooltip"] = df_agrupado["Subtotal Neto"].apply(formato_moneda)
+    def formatear_clp(valor):
+        return f"${int(valor):,}".replace(",", ".")
 
-    graf2 = alt.Chart(df_agrupado).mark_line(point=True, color="#e41a1c").encode(
+    df_agrupado["Margen Neto Tooltip"] = df_agrupado["Margen Neto"].apply(formatear_clp)
+    df_agrupado["Subtotal Neto Tooltip"] = df_agrupado["Subtotal Neto"].apply(formatear_clp)
+
+    graf2 = alt.Chart(df_agrupado).mark_line(point=True).encode(
         x=alt.X(col_mes, sort=orden_meses, title="Mes"),
         y=alt.Y("Margen Neto", title="Margen Neto"),
         tooltip=[
@@ -240,7 +231,7 @@ with tab1:
     if len(sucursales_disponibles) > 1:
         st.markdown("## 🏪 Ventas por Sucursal")
         ventas_suc = df_filtrado.groupby(col_sucursal)["Subtotal Neto"].sum().sort_values(ascending=False).reset_index()
-        graf3 = alt.Chart(ventas_suc).mark_bar(color="#4daf4a").encode(
+        graf3 = alt.Chart(ventas_suc).mark_bar().encode(
             x=alt.X("Subtotal Neto:Q", title="Subtotal CLP"),
             y=alt.Y(f"{col_sucursal}:N", sort="-x"),
             tooltip=[alt.Tooltip("Subtotal Neto", format=",.0f")]
@@ -249,7 +240,7 @@ with tab1:
 
     st.markdown("## 🛒 Top 10 Productos por Subtotal Neto")
     top_prod = df_filtrado.groupby(col_producto)["Subtotal Neto"].sum().sort_values(ascending=False).head(10).reset_index()
-    graf4 = alt.Chart(top_prod).mark_bar(color="#984ea3").encode(
+    graf4 = alt.Chart(top_prod).mark_bar().encode(
         x=alt.X("Subtotal Neto:Q", title="Subtotal CLP"),
         y=alt.Y(f"{col_producto}:N", sort="-x"),
         tooltip=[alt.Tooltip("Subtotal Neto", format=",.0f")]
@@ -259,36 +250,36 @@ with tab1:
     if col_tipo_producto:
         st.markdown(f"## 📊 Subtotal por Tipo de Producto / Servicio ({seleccion_tipo_producto or 'Todos'})")
         ventas_tipo = df_filtrado.groupby(col_tipo_producto)["Subtotal Neto"].sum().sort_values(ascending=False).reset_index()
-        graf5 = alt.Chart(ventas_tipo).mark_bar(color="#ff7f00").encode(
+        graf5 = alt.Chart(ventas_tipo).mark_bar().encode(
             x=alt.X("Subtotal Neto:Q", title="Subtotal CLP"),
             y=alt.Y(f"{col_tipo_producto}:N", sort="-x"),
             tooltip=[alt.Tooltip("Subtotal Neto", format=",.0f")]
         ).properties(height=400)
         st.altair_chart(graf5, use_container_width=True)
 
-    # --- Cantidad diaria para producto y mes seleccionados ---
+    # --- Nuevo: Cantidad diaria del producto seleccionado en mes seleccionado ---
     if seleccion_mes != "Todos" and seleccion_producto != "Todos" and col_dia and col_dia in df_filtrado.columns:
         st.markdown(f"## 📅 Cantidad Vendida por Día para '{seleccion_producto}' en {seleccion_mes.capitalize()}")
+
         df_producto_mes = df_filtrado[(df_filtrado[col_producto] == seleccion_producto) & (df_filtrado[col_mes] == seleccion_mes)]
+
         df_dias_producto = df_producto_mes.groupby(col_dia).agg({"Cantidad": "sum"}).reset_index()
+
         df_dias_producto[col_dia] = pd.to_numeric(df_dias_producto[col_dia], errors='coerce')
         df_dias_producto = df_dias_producto.sort_values(col_dia)
 
-        # Crear tooltip con fecha completa
-        df_dias_producto["Tooltip Dia"] = df_dias_producto.apply(
-            lambda row: dia_semana_nombre(seleccion_mes, row[col_dia]), axis=1)
-
-        graf_cantidad_dia = alt.Chart(df_dias_producto).mark_bar(color="#66c2a5").encode(
+        graf_cantidad_dia = alt.Chart(df_dias_producto).mark_bar().encode(
             x=alt.X(f"{col_dia}:O", title="Día del Mes"),
             y=alt.Y("Cantidad", title="Cantidad Vendida"),
             tooltip=[
-                alt.Tooltip("Tooltip Dia", title="Fecha"),
+                alt.Tooltip(f"{col_dia}", title="Día"),
                 alt.Tooltip("Cantidad", format=",.0f", title="Cantidad")
             ]
         ).properties(height=400)
+
         st.altair_chart(graf_cantidad_dia, use_container_width=True)
 
-    # --- Tabla detalle ---
+    # --- Tabla final ---
     st.markdown("## 📋 Detalle de Ventas")
     st.dataframe(df_filtrado.sort_values(by="Subtotal Neto", ascending=False), use_container_width=True)
 
@@ -323,3 +314,22 @@ with tab2:
         ).properties(height=400)
         st.altair_chart(graf_abc, use_container_width=True)
 
+with tab3:
+    st.markdown("## 🍂 Análisis por Temporada")
+
+    if seleccion_temporada == "Todas":
+        st.info("Selecciona una temporada en el filtro lateral para ver datos por temporada.")
+    else:
+        resumen_temp = df_filtrado.groupby('Temporada').sum()[medidas].loc[seleccion_temporada]
+        st.write(f"### Resumen Temporada: {seleccion_temporada}")
+        for m in medidas:
+            st.metric(m, formato_moneda(resumen_temp[m]) if m != 'Cantidad' else f"{int(resumen_temp[m]):,}".replace(",", "."))
+
+        ventas_temp_prod = df_filtrado[df_filtrado['Temporada'] == seleccion_temporada].groupby(col_producto)['Subtotal Neto'].sum().sort_values(ascending=False).reset_index()
+        st.markdown("#### Top Productos en Temporada")
+        graf_temp_prod = alt.Chart(ventas_temp_prod.head(10)).mark_bar().encode(
+            x=alt.X('Subtotal Neto:Q', title="Subtotal Neto CLP"),
+            y=alt.Y(f"{col_producto}:N", sort='-x'),
+            tooltip=[alt.Tooltip('Subtotal Neto', format=",.0f")]
+        ).properties(height=400)
+        st.altair_chart(graf_temp_prod, use_container_width=True)
