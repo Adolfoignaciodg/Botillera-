@@ -57,7 +57,7 @@ col_sucursal = encontrar_col("sucursal")
 col_producto = encontrar_col("producto / servicio + variante")
 col_mes = encontrar_col("mes")
 col_tipo_producto = encontrar_col("tipo de producto / servicio")
-col_fecha = encontrar_col("fecha")  # Importante para detalle diario, debe existir
+col_fecha = encontrar_col("fecha")
 
 medidas_esperadas = ["Subtotal Neto", "Subtotal Bruto", "Margen Neto", "Costo Neto", "Impuestos", "Cantidad"]
 medidas = [m for m in medidas_esperadas if m in cols]
@@ -154,7 +154,6 @@ with tab1:
         display_val = f"{int(valor):,}".replace(",", ".") if m == 'Cantidad' else formato_moneda(valor)
         cols_metrics[idx].metric(m, display_val)
 
-    # Mostrar tabla con cantidades vendidas por producto (filtrada por tipo producto y mes)
     st.markdown(f"## 🛒 Cantidades Vendidas por Producto en categoría '{seleccion_tipo_producto or 'Todos'}' " +
                 (f"y Mes '{seleccion_mes}'" if seleccion_mes != "Todos" else "(todo el tiempo)"))
 
@@ -165,14 +164,17 @@ with tab1:
     cantidades_por_producto = df_cantidades.groupby(col_producto)['Cantidad'].sum().reset_index().sort_values(by='Cantidad', ascending=False)
     st.dataframe(cantidades_por_producto, use_container_width=True)
 
+    # Tabla pivote detalle diario con productos en filas y fechas en columnas
     st.markdown(f"## 📅 Detalle Diario de Ventas " +
                 (f"para producto '{seleccion_producto}'" if seleccion_producto != "Todos" else "para todos los productos"))
 
     if seleccion_producto == "Todos":
         detalle_diario = df_filtrado.groupby([col_producto, col_fecha])['Cantidad'].sum().reset_index()
         pivot_diario = detalle_diario.pivot(index=col_producto, columns=col_fecha, values='Cantidad').fillna(0)
-        # Formatear columnas fecha a DD/MM/AAAA
+
+        # Formatear columnas fecha DD/MM/AAAA
         pivot_diario.columns = pivot_diario.columns.strftime('%d/%m/%Y')
+
         st.dataframe(pivot_diario.astype(int), use_container_width=True)
 
         prod_para_graf = st.selectbox("Seleccionar Producto para gráfico diario", ["Todos"] + sorted(detalle_diario[col_producto].unique()))
@@ -210,7 +212,6 @@ with tab2:
     if df_abc.empty:
         st.warning("No hay datos para esta selección.")
     else:
-        # Reusar función calcular_abc si la tienes definida
         def calcular_abc(df_abc, valor_col='Subtotal Neto', grupo_col=col_producto):
             df_abc = df_abc.groupby(grupo_col)[valor_col].sum().reset_index()
             df_abc = df_abc.sort_values(by=valor_col, ascending=False)
