@@ -6,6 +6,11 @@ import altair as alt
 st.set_page_config(page_title="Dashboard Botillería", layout="wide")
 st.title("📊 Dashboard de Ventas - Visión Propietario")
 
+# --- Botón para refrescar datos ---
+if st.sidebar.button("🔄 Actualizar datos"):
+    st.cache_data.clear()
+    st.experimental_rerun()
+
 # --- Leer JSON config ---
 try:
     with open("report.json", "r", encoding="utf-8") as f:
@@ -20,8 +25,8 @@ if not csv_url:
     st.error("No se encontró URL CSV en JSON.")
     st.stop()
 
-# --- Cargar datos CSV ---
-@st.cache_data
+# --- Cargar datos CSV con caché que expira cada 10 minutos ---
+@st.cache_data(ttl=600)
 def cargar_datos(url):
     try:
         df = pd.read_csv(url, sep=None, engine='python')
@@ -35,6 +40,8 @@ df = cargar_datos(csv_url)
 if df.empty:
     st.warning("Archivo CSV vacío o no cargado.")
     st.stop()
+
+# --- Resto de tu código sigue igual ---
 
 # --- Detectar columnas clave ---
 cols = df.columns.tolist()
