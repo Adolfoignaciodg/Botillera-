@@ -67,25 +67,9 @@ for col in medidas:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-# --- Normalizar columna Mes para tener solo nombre en minúsculas ---
-def numero_a_mes(mes):
-    m = str(mes).strip()
-    if m.isdigit():
-        n = int(m)
-        if 1 <= n <= 12:
-            meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
-                     "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
-            return meses[n-1]
-    # Si es texto, sacar números al inicio y pasar a minúscula
-    # Ejemplo: "01 enero" -> "enero"
-    import re
-    texto_sin_num = re.sub(r"^\d+\s*", "", m).lower()
-    return texto_sin_num
-
-df[col_mes] = df[col_mes].apply(numero_a_mes)
-
 # --- Crear columna Temporada ---
 def mes_a_temporada(mes):
+    mes = str(mes).lower()
     if mes in ['diciembre', 'enero', 'febrero']:
         return 'Verano'
     elif mes in ['marzo', 'abril', 'mayo']:
@@ -182,13 +166,6 @@ def calcular_abc(df_abc, valor_col='Subtotal Neto', grupo_col=col_producto):
     df_abc['Categoria'] = pd.cut(df_abc['PorcAcum'], bins=[0, 0.7, 0.9, 1], labels=choices, include_lowest=True)
     return df_abc
 
-# --- Definir orden meses para gráfico ---
-orden_meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
-               "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
-
-# Convertir columna mes a tipo categórico ordenado
-df_filtrado[col_mes] = pd.Categorical(df_filtrado[col_mes], categories=orden_meses, ordered=True)
-
 # --- Pestañas ---
 tab1, tab2, tab3 = st.tabs(["Resumen y Gráficos", "Análisis ABC", "Análisis por Temporada"])
 
@@ -207,7 +184,7 @@ with tab1:
     # --- Gráficos con Altair ---
     st.markdown("## 📈 Subtotal Neto por Mes")
     graf1 = alt.Chart(df_filtrado).mark_bar().encode(
-        x=alt.X(col_mes, sort=orden_meses),
+        x=alt.X(col_mes, sort="ascending"),
         y=alt.Y("sum(Subtotal Neto)", title="Subtotal Neto"),
         tooltip=[
             alt.Tooltip("sum(Subtotal Neto)", title="Subtotal CLP", format=",.0f"),
@@ -218,25 +195,12 @@ with tab1:
     st.altair_chart(graf1, use_container_width=True)
 
     st.markdown("## 📉 Margen Neto por Mes")
-
-    # Agrupar datos para tooltip formateado
-    df_agrupado = df_filtrado.groupby(col_mes).agg({
-        "Margen Neto": "sum",
-        "Subtotal Neto": "sum"
-    }).reset_index()
-
-    def formatear_clp(valor):
-        return f"${int(valor):,}".replace(",", ".")
-
-    df_agrupado["Margen Neto Tooltip"] = df_agrupado["Margen Neto"].apply(formatear_clp)
-    df_agrupado["Subtotal Neto Tooltip"] = df_agrupado["Subtotal Neto"].apply(formatear_clp)
-
-    graf2 = alt.Chart(df_agrupado).mark_line(point=True).encode(
-        x=alt.X(col_mes, sort=orden_meses, title="Mes"),
-        y=alt.Y("Margen Neto", title="Margen Neto"),
+    graf2 = alt.Chart(df_filtrado).mark_line(point=True).encode(
+        x=alt.X(col_mes, sort="ascending"),
+        y=alt.Y("sum(Margen Neto)", title="Margen Neto"),
         tooltip=[
-            alt.Tooltip("Margen Neto Tooltip", title="Margen CLP"),
-            alt.Tooltip("Subtotal Neto Tooltip", title="Subtotal CLP")
+            alt.Tooltip("sum(Margen Neto)", format=",.0f"),
+            alt.Tooltip("sum(Subtotal Neto)", format=",.0f")
         ]
     ).properties(height=400)
     st.altair_chart(graf2, use_container_width=True)
@@ -277,6 +241,7 @@ with tab1:
 with tab2:
     st.markdown("## 🔍 Análisis ABC de Productos")
 
+    # Opción de filtrar por mes o total
     opcion_abc = st.radio("Ver análisis ABC por:", ("Total", "Por Mes"))
 
     if opcion_abc == "Total":
@@ -292,6 +257,7 @@ with tab2:
 
         st.dataframe(df_abc_result[[col_producto, 'Subtotal Neto', 'PorcAcum', 'Categoria']].sort_values(by='Categoria'))
 
+        # Gráfico ABC
         graf_abc = alt.Chart(df_abc_result).mark_bar().encode(
             x=alt.X(col_producto, sort='-y'),
             y=alt.Y('Subtotal Neto', title='Subtotal Neto CLP'),
@@ -316,6 +282,7 @@ with tab3:
         for m in medidas:
             st.metric(m, formato_moneda(resumen_temp[m]) if m != 'Cantidad' else f"{int(resumen_temp[m]):,}".replace(",", "."))
 
+        # Gráfico ventas por producto en temporada
         ventas_temp_prod = df_filtrado[df_filtrado['Temporada'] == seleccion_temporada].groupby(col_producto)['Subtotal Neto'].sum().sort_values(ascending=False).reset_index()
         st.markdown("#### Top Productos en Temporada")
         graf_temp_prod = alt.Chart(ventas_temp_prod.head(10)).mark_bar().encode(
