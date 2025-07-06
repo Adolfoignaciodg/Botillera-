@@ -268,25 +268,35 @@ with tab1:
 
     # --- Cantidad diaria para producto y mes seleccionados ---
 if seleccion_mes != "Todos" and col_dia and col_dia in df_filtrado.columns:
-        producto_str = "" 
-   if seleccion_producto == "Todos" else f"'{seleccion_producto}'"
+    # Asignar el nombre del producto para el título
+    producto_str = "" if seleccion_producto == "Todos" else f"'{seleccion_producto}'"
+    
     st.markdown(f"## 📅 Cantidad Vendida por Día para {producto_str} en {seleccion_mes.capitalize()}")
 
     # Filtrar para día según producto o tipo producto o todos
-   if seleccion_producto != "Todos":
-        df_producto_mes = df_filtrado[(df_filtrado[col_producto] == seleccion_producto) & (df_filtrado[col_mes] == seleccion_mes)]
+    if seleccion_producto != "Todos":
+        df_producto_mes = df_filtrado[
+            (df_filtrado[col_producto] == seleccion_producto) & 
+            (df_filtrado[col_mes] == seleccion_mes)
+        ]
     elif seleccion_tipo_producto and seleccion_tipo_producto != "Todos":
-        df_producto_mes = df_filtrado[(df_filtrado[col_tipo_producto] == seleccion_tipo_producto) & (df_filtrado[col_mes] == seleccion_mes)]
+        df_producto_mes = df_filtrado[
+            (df_filtrado[col_tipo_producto] == seleccion_tipo_producto) & 
+            (df_filtrado[col_mes] == seleccion_mes)
+        ]
     else:
         df_producto_mes = df_filtrado[df_filtrado[col_mes] == seleccion_mes]
 
+    # Agrupar y ordenar por día
     df_dias_producto = df_producto_mes.groupby(col_dia).agg({"Cantidad": "sum"}).reset_index()
     df_dias_producto[col_dia] = pd.to_numeric(df_dias_producto[col_dia], errors='coerce')
     df_dias_producto = df_dias_producto.sort_values(col_dia)
 
+    # Agregar nombre del día
     df_dias_producto["Tooltip Dia"] = df_dias_producto.apply(
         lambda row: dia_semana_nombre(seleccion_mes, row[col_dia]), axis=1)
 
+    # Crear gráfico
     graf_cantidad_dia = alt.Chart(df_dias_producto).mark_bar(color="#66c2a5").encode(
         x=alt.X(f"{col_dia}:O", title="Día del Mes"),
         y=alt.Y("Cantidad", title="Cantidad Vendida"),
@@ -295,14 +305,17 @@ if seleccion_mes != "Todos" and col_dia and col_dia in df_filtrado.columns:
             alt.Tooltip("Cantidad", format=",.0f", title="Cantidad")
         ]
     ).properties(height=400)
+
     st.altair_chart(graf_cantidad_dia, use_container_width=True)
 
+    # Mostrar tabla resumen
     st.markdown("### 🧾 Resumen de Cantidad Vendida por Día")
-    st.dataframe(df_dias_producto[[col_dia, "Cantidad"]]
-                 .rename(columns={col_dia:"Día del Mes", "Cantidad":"Cantidad Vendida"})
-                 .reset_index(drop=True),
-                 use_container_width=True)
-
+    st.dataframe(
+        df_dias_producto[[col_dia, "Cantidad"]]
+        .rename(columns={col_dia: "Día del Mes", "Cantidad": "Cantidad Vendida"})
+        .reset_index(drop=True),
+        use_container_width=True
+    )
     # --- Tabla detalle ---
     st.markdown("## 📋 Detalle de Ventas")
     st.dataframe(df_filtrado.sort_values(by="Subtotal Neto", ascending=False), use_container_width=True)
