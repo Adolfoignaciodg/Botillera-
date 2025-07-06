@@ -150,7 +150,7 @@ if len(sucursales_disponibles) > 1 and seleccion_sucursal != "Todas":
 if seleccion_tipo_producto and seleccion_tipo_producto != "Todos":
     df_filtrado = df_filtrado[df_filtrado[col_tipo_producto] == seleccion_tipo_producto]
 
-if seleccion_mes != "Todos":
+if seleccion_mes != "Todas" and seleccion_mes != "Todos":
     df_filtrado = df_filtrado[df_filtrado[col_mes] == seleccion_mes]
 
 if seleccion_producto != "Todos":
@@ -169,11 +169,12 @@ def formato_moneda(x):
         return "$0"
 
 # --- Pestañas ---
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Resumen y Detalle",
     "Análisis ABC",
     "Detalle por Día y Categoría",
-    "🧾 Productos Repetidos / No Registrados"
+    "🧾 Productos Repetidos / No Registrados",
+    "📦 Cuadratura de Stock"
 ])
 
 with tab1:
@@ -364,3 +365,112 @@ with tab4:
                     st.dataframe(pd.DataFrame(skus_no_catalogo, columns=["SKU vendido no registrado"]))
                 else:
                     st.success("Todos los SKUs vendidos están registrados en el catálogo.")
+
+
+
+# --- NUEVA PESTAÑA: Cuadratura de Stock ---
+with tab5:
+    st.markdown("## 📦 Cuadratura de Stock")
+
+    # URL raw directa a tu Excel stock.xlsx (modifica según tu repo)
+    url_stock = "https://raw.githubusercontent.com/Adolfoignaciodg/Botillera-/main/stock.xlsx"
+
+    @st.cache_data
+    def cargar_stock(url):
+        try:
+            df_stock = pd.read_excel(url)
+            df_stock.columns = df_stock.columns.str.strip()
+            return df_stock
+        except Exception as e:
+            st.error(f"Error cargando archivo de stock: {e}")
+            return pd.DataFrame()
+
+    df_stock = cargar_stock(url_stock)
+
+    if df_stock.empty:
+        st.warning("No se pudo cargar el archivo de stock.")
+    else:
+        # Filtrar solo las categorías que nos interesan
+        categorias_clave = [
+            'DESTILADOS',
+            'AGUAS. JUGOS Y TE HELADO',
+            'BEBIDAS',
+            'CERVEZAS',
+            'VINOS',
+            'TABAQUERIA',
+            'LICORES',
+            'ENERGETICAS E ISOTONICAS',
+            'ESPUMANTES'
+        ]
+
+        # Buscar columna Categoría (sensible a mayúsculas/minúsculas)
+        col_categoria_stock = None
+        for c in df_stock.columns:
+            if "categor" in c.lower():
+                col_categoria_stock = c
+                break
+
+        if not col_categoria_stock:
+            st.error("No se encontró columna de categoría en archivo de stock.")
+        else:
+            df_stock_filtrado = df_stock[df_stock[col_categoria_stock].str.upper().isin(categorias_clave)]
+
+            # Mostrar filtros
+            categorias_disponibles = sorted(df_stock_filtrado[col_categoria_stock].dropna().unique())
+            seleccion_cat_stock = st.selectbox("Seleccionar Categoría", ["Todas"] + categorias_disponibles)
+
+            # Si selecciona categoría filtra
+            if seleccion_cat_stock != "Todas":
+                df_stock_filtrado = df_stock_filtrado[df_stock_filtrado[col_categoria_stock] == seleccion_cat_stock]
+
+            # Columnas para mostrar, ajustar según tu stock.xlsx
+            columnas_mostrar = []
+            posibles_cols = [
+                "Producto",
+                "Marca",
+                "Stock Actual",
+                "Por Despachar",
+                "Disponible",
+                "Por Recibir",
+                "Costo Neto Promedio",
+                "Precio Venta",
+                "Margen"
+            ]
+            # Mapear columnas según las que existan realmente en el archivo
+            for pc in posibles_cols:
+                for c in df_stock_filtrado.columns:
+                    if pc.lower() == c.lower():
+                        columnas_mostrar.append(c)
+                        break
+
+            if columnas_mostrar:
+                # Resaltar stock 0 o bajo con estilo
+                def destacar_stock(val):
+                    try:
+                        if float(val) == 0:
+                            return 'background-color: #ff4d4d; color: white; font-weight: bold'
+                        elif float(val) < 5:
+                            return 'background-color: #ffcc00; font-weight: bold'
+                    except:
+                        return ''
+
+                # Mostrar tabla con estilos para la columna Stock Actual si existe
+                if "Stock Actual" in columnas_mostrar or any("stock" in c.lower() for c in columnas_mostrar):
+                    st.markdown("### Tabla de stock filtrado")
+                    styled_df = df_stock_filtrado[columnas_mostrar].style.applymap(destacar_stock, subset=[c for c in columnas_mostrar if "stock" in c.lower()])
+                    st.dataframe(styled_df, use_container_width=True)
+                else:
+                    st.dataframe(df_stock_filtrado[columnas_mostrar], use_container_width=True)
+
+                # KPIs resumen por categoría
+                resumen_stock = df_stock_filtrado.groupby(col_categoria_stock).agg({
+                    c: 'sum' for c in columnas_mostrar if c.lower() in ['stock actual', 'por despachar', 'disponible', 'por recibir']
+                }).reset_index()
+
+                if not resumen_stock.empty:
+                    st.markdown("### Resumen por Categoría")
+                    st.dataframe(resumen_stock, use_container_width=True)
+            else:
+                st.warning("No se encontraron columnas esperadas en archivo de stock para mostrar.")
+
+
