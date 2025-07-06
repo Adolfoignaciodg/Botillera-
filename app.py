@@ -158,45 +158,41 @@ with tab1:
     st.markdown(f"## 🛒 Cantidades Vendidas por Producto en categoría '{seleccion_tipo_producto or 'Todos'}' " +
                 (f"y Mes '{seleccion_mes}'" if seleccion_mes != "Todos" else "(todo el tiempo)"))
 
-    # Agregar agrupación y suma cantidades por producto, respetando filtros aplicados (excepto producto seleccionado)
     df_cantidades = df_filtrado.copy()
     if seleccion_producto != "Todos":
-        # Si producto específico, mostramos solo ese producto
         df_cantidades = df_cantidades[df_cantidades[col_producto] == seleccion_producto]
 
     cantidades_por_producto = df_cantidades.groupby(col_producto)['Cantidad'].sum().reset_index().sort_values(by='Cantidad', ascending=False)
     st.dataframe(cantidades_por_producto, use_container_width=True)
 
-    # Mostrar detalle diario según producto seleccionado
     st.markdown(f"## 📅 Detalle Diario de Ventas " +
                 (f"para producto '{seleccion_producto}'" if seleccion_producto != "Todos" else "para todos los productos"))
 
     if seleccion_producto == "Todos":
-        # Mostrar detalle diario para todos productos en la categoría y mes seleccionados
         detalle_diario = df_filtrado.groupby([col_producto, col_fecha])['Cantidad'].sum().reset_index()
-        detalle_diario = detalle_diario.sort_values([col_producto, col_fecha])
-        st.dataframe(detalle_diario, use_container_width=True)
+        pivot_diario = detalle_diario.pivot(index=col_producto, columns=col_fecha, values='Cantidad').fillna(0)
+        # Formatear columnas fecha a DD/MM/AAAA
+        pivot_diario.columns = pivot_diario.columns.strftime('%d/%m/%Y')
+        st.dataframe(pivot_diario.astype(int), use_container_width=True)
 
-        # Opcional: mostrar gráfico diario total por producto seleccionado en dropdown adicional
         prod_para_graf = st.selectbox("Seleccionar Producto para gráfico diario", ["Todos"] + sorted(detalle_diario[col_producto].unique()))
         if prod_para_graf != "Todos":
             df_graf = detalle_diario[detalle_diario[col_producto] == prod_para_graf]
             graf_diario = alt.Chart(df_graf).mark_line(point=True).encode(
-                x=alt.X(col_fecha, title="Fecha", axis=alt.Axis(format='%Y-%m-%d')),
+                x=alt.X(col_fecha, title="Fecha", axis=alt.Axis(format='%d/%m/%Y')),
                 y=alt.Y('Cantidad', title="Cantidad Vendida"),
-                tooltip=[alt.Tooltip(col_fecha, title="Fecha", format='%Y-%m-%d'), alt.Tooltip('Cantidad')]
+                tooltip=[alt.Tooltip(col_fecha, title="Fecha", format='%d/%m/%Y'), alt.Tooltip('Cantidad')]
             ).properties(height=300)
             st.altair_chart(graf_diario, use_container_width=True)
 
     else:
-        # Mostrar detalle diario para producto específico
         detalle_diario = df_filtrado.groupby(col_fecha)['Cantidad'].sum().reset_index().sort_values(col_fecha)
         st.dataframe(detalle_diario, use_container_width=True)
 
         graf_diario = alt.Chart(detalle_diario).mark_line(point=True).encode(
-            x=alt.X(col_fecha, title="Fecha", axis=alt.Axis(format='%Y-%m-%d')),
+            x=alt.X(col_fecha, title="Fecha", axis=alt.Axis(format='%d/%m/%Y')),
             y=alt.Y('Cantidad', title="Cantidad Vendida"),
-            tooltip=[alt.Tooltip(col_fecha, title="Fecha", format='%Y-%m-%d'), alt.Tooltip('Cantidad')]
+            tooltip=[alt.Tooltip(col_fecha, title="Fecha", format='%d/%m/%Y'), alt.Tooltip('Cantidad')]
         ).properties(height=300)
         st.altair_chart(graf_diario, use_container_width=True)
 
@@ -240,4 +236,3 @@ with tab2:
             ]
         ).properties(height=400)
         st.altair_chart(graf_abc, use_container_width=True)
-
