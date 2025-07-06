@@ -3,29 +3,37 @@ import pandas as pd
 import json
 import altair as alt
 
+# Configuración de la página
 st.set_page_config(page_title="Dashboard Botillería", layout="wide")
 st.title("📊 Dashboard de Ventas - Visión Propietario")
 
-# --- Leer JSON config ---
-try:
-    with open("report.json", "r", encoding="utf-8") as f:
-        config = json.load(f)
-except Exception as e:
-    st.error(f"Error leyendo JSON: {e}")
+# --- Carga y validación del archivo JSON de configuración ---
+@st.cache_data
+def cargar_config(path="report.json"):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        st.error(f"Error leyendo JSON: {e}")
+        return None
+
+config = cargar_config()
+if not config:
     st.stop()
 
-# --- Obtener URL CSV ---
+# --- Obtener URL CSV desde JSON ---
 csv_url = config.get("dataSource", {}).get("filename", "")
 if not csv_url:
     st.error("No se encontró URL CSV en JSON.")
     st.stop()
 
-# --- Cargar datos CSV ---
-@st.cache_data
+# --- Función para cargar datos CSV con cache ---
+@st.cache_data(show_spinner=False)
 def cargar_datos(url):
     try:
+        # Intentar inferir separador con engine='python' y sep=None
         df = pd.read_csv(url, sep=None, engine='python')
-        df.columns = df.columns.str.strip()
+        df.columns = df.columns.str.strip()  # Limpiar espacios en nombres columnas
         return df
     except Exception as e:
         st.error(f"Error cargando CSV: {e}")
@@ -38,9 +46,10 @@ if df.empty:
 
 # --- Detectar columnas clave ---
 cols = df.columns.tolist()
-def encontrar_col(busqueda):
+
+def encontrar_col(busqueda, columnas=cols):
     busqueda = busqueda.lower()
-    for c in cols:
+    for c in columnas:
         if busqueda in c.lower():
             return c
     return None
@@ -53,7 +62,8 @@ col_tipo_producto = encontrar_col("tipo de producto / servicio")
 medidas_esperadas = ["Subtotal Neto", "Subtotal Bruto", "Margen Neto", "Costo Neto", "Impuestos", "Cantidad"]
 medidas = [m for m in medidas_esperadas if m in cols]
 
-if not col_sucursal or not col_producto or not col_mes:
+# Validaciones básicas
+if not all([col_sucursal, col_producto, col_mes]):
     st.error("No se encontraron columnas clave para sucursal, producto o mes en el CSV.")
     st.write("Columnas encontradas:", cols)
     st.stop()
@@ -64,8 +74,7 @@ if not medidas:
 
 # --- Conversión de medidas a float ---
 for col in medidas:
-    if col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df[col] = pd.to_numeric(df[col], errors="coerce")
 
 # --- Crear columna Temporada ---
 def mes_a_temporada(mes):
@@ -83,39 +92,39 @@ def mes_a_temporada(mes):
 
 df['Temporada'] = df[col_mes].apply(mes_a_temporada)
 
-# --- Detectar sucursales únicas para lógica de filtros ---
-sucursales_disponibles = sorted(df[col_sucursal].dropna().unique().tolist())
+# --- Detectar sucursales únicas para filtros ---
+sucursales_disponibles = sorted(df[col_sucursal].dropna().unique())
 
-# --- Sidebar filtros ---
+# --- Sidebar: filtros ---
 st.sidebar.header("Filtros")
 
 if len(sucursales_disponibles) == 1:
     seleccion_sucursal = sucursales_disponibles[0]
     st.sidebar.markdown(f"**Sucursal:** {seleccion_sucursal}")
 else:
-    sucursales = ["Todas"] + sucursales_disponibles
-    seleccion_sucursal = st.sidebar.selectbox("Seleccionar Sucursal", sucursales)
+    opciones_suc = ["Todas"] + sucursales_disponibles
+    seleccion_sucursal = st.sidebar.selectbox("Seleccionar Sucursal", opciones_suc)
 
-# Filtro tipo producto
+# Tipo de producto (si existe)
 if col_tipo_producto:
-    tipos_producto = ["Todos"] + sorted(df[col_tipo_producto].dropna().unique().tolist())
+    tipos_producto = ["Todos"] + sorted(df[col_tipo_producto].dropna().unique())
     seleccion_tipo_producto = st.sidebar.selectbox("Seleccionar Tipo de Producto / Servicio", tipos_producto)
 else:
     seleccion_tipo_producto = None
 
-# Filtro productos dependiente de tipo
-df_para_productos = df.copy()
+# Productos filtrados por tipo
+df_productos = df.copy()
 if seleccion_tipo_producto and seleccion_tipo_producto != "Todos" and col_tipo_producto:
-    df_para_productos = df_para_productos[df_para_productos[col_tipo_producto] == seleccion_tipo_producto]
+    df_productos = df_productos[df_productos[col_tipo_producto] == seleccion_tipo_producto]
 
-productos = ["Todos"] + sorted(df_para_productos[col_producto].dropna().unique().tolist())
+productos = ["Todos"] + sorted(df_productos[col_producto].dropna().unique())
 seleccion_producto = st.sidebar.selectbox("Seleccionar Producto", productos)
 
-# Filtro mes
-meses = ["Todos"] + sorted(df[col_mes].dropna().unique().tolist())
+# Mes
+meses = ["Todos"] + sorted(df[col_mes].dropna().unique())
 seleccion_mes = st.sidebar.selectbox("Seleccionar Mes", meses)
 
-# Filtro temporada
+# Temporada
 temporadas = ["Todas", "Verano", "Otoño", "Invierno", "Primavera"]
 seleccion_temporada = st.sidebar.selectbox("Seleccionar Temporada", temporadas)
 
@@ -141,15 +150,15 @@ if df_filtrado.empty:
     st.warning("No hay datos para los filtros seleccionados.")
     st.stop()
 
-# --- Función formato moneda robusta ---
+# --- Funciones auxiliares ---
 def formato_moneda(x):
     try:
         val = float(x)
+        # Reemplaza coma decimal por punto para formato chileno, separador miles punto
         return f"${val:,.0f}".replace(",", ".")
-    except:
+    except Exception:
         return "$0"
 
-# --- Función para cálculo ABC ---
 def calcular_abc(df_abc, valor_col='Subtotal Neto', grupo_col=col_producto):
     df_abc = df_abc.groupby(grupo_col)[valor_col].sum().reset_index()
     df_abc = df_abc.sort_values(by=valor_col, ascending=False)
@@ -157,31 +166,27 @@ def calcular_abc(df_abc, valor_col='Subtotal Neto', grupo_col=col_producto):
     total = df_abc[valor_col].sum()
     df_abc['PorcAcum'] = df_abc['Acumulado'] / total
     # Categorizar ABC según % acumulado
-    conditions = [
-        (df_abc['PorcAcum'] <= 0.7),
-        (df_abc['PorcAcum'] > 0.7) & (df_abc['PorcAcum'] <= 0.9),
-        (df_abc['PorcAcum'] > 0.9)
-    ]
-    choices = ['A', 'B', 'C']
-    df_abc['Categoria'] = pd.cut(df_abc['PorcAcum'], bins=[0, 0.7, 0.9, 1], labels=choices, include_lowest=True)
+    bins = [0, 0.7, 0.9, 1]
+    labels = ['A', 'B', 'C']
+    df_abc['Categoria'] = pd.cut(df_abc['PorcAcum'], bins=bins, labels=labels, include_lowest=True)
     return df_abc
 
 # --- Pestañas ---
 tab1, tab2, tab3 = st.tabs(["Resumen y Gráficos", "Análisis ABC", "Análisis por Temporada"])
 
 with tab1:
-    # --- Resumen General ---
     st.markdown("## 📌 Resumen General")
     resumen = {m: df_filtrado[m].sum() for m in medidas}
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    col1.metric("Subtotal Neto", formato_moneda(resumen.get("Subtotal Neto", 0)))
-    col2.metric("Subtotal Bruto", formato_moneda(resumen.get("Subtotal Bruto", 0)))
-    col3.metric("Margen Neto", formato_moneda(resumen.get("Margen Neto", 0)))
-    col4.metric("Costo Neto", formato_moneda(resumen.get("Costo Neto", 0)))
-    col5.metric("Impuestos", formato_moneda(resumen.get("Impuestos", 0)))
-    col6.metric("Cantidad Vendida", f"{int(resumen.get('Cantidad', 0)):,}".replace(",", "."))
+    cols_metrics = st.columns(len(medidas))
+    for idx, m in enumerate(medidas):
+        valor = resumen.get(m, 0)
+        if m == 'Cantidad':
+            display_val = f"{int(valor):,}".replace(",", ".")
+        else:
+            display_val = formato_moneda(valor)
+        cols_metrics[idx].metric(m, display_val)
 
-    # --- Gráficos con Altair ---
+    # Gráfico Subtotal Neto por Mes
     st.markdown("## 📈 Subtotal Neto por Mes")
     graf1 = alt.Chart(df_filtrado).mark_bar().encode(
         x=alt.X(col_mes, sort="ascending"),
@@ -194,6 +199,7 @@ with tab1:
     ).properties(height=400)
     st.altair_chart(graf1, use_container_width=True)
 
+    # Gráfico Margen Neto por Mes
     st.markdown("## 📉 Margen Neto por Mes")
     graf2 = alt.Chart(df_filtrado).mark_line(point=True).encode(
         x=alt.X(col_mes, sort="ascending"),
@@ -205,6 +211,7 @@ with tab1:
     ).properties(height=400)
     st.altair_chart(graf2, use_container_width=True)
 
+    # Ventas por sucursal (si hay más de una)
     if len(sucursales_disponibles) > 1:
         st.markdown("## 🏪 Ventas por Sucursal")
         ventas_suc = df_filtrado.groupby(col_sucursal)["Subtotal Neto"].sum().sort_values(ascending=False).reset_index()
@@ -215,6 +222,7 @@ with tab1:
         ).properties(height=400)
         st.altair_chart(graf3, use_container_width=True)
 
+    # Top 10 productos
     st.markdown("## 🛒 Top 10 Productos por Subtotal Neto")
     top_prod = df_filtrado.groupby(col_producto)["Subtotal Neto"].sum().sort_values(ascending=False).head(10).reset_index()
     graf4 = alt.Chart(top_prod).mark_bar().encode(
@@ -224,6 +232,7 @@ with tab1:
     ).properties(height=400)
     st.altair_chart(graf4, use_container_width=True)
 
+    # Ventas por tipo de producto (si existe)
     if col_tipo_producto:
         st.markdown(f"## 📊 Subtotal por Tipo de Producto / Servicio ({seleccion_tipo_producto or 'Todos'})")
         ventas_tipo = df_filtrado.groupby(col_tipo_producto)["Subtotal Neto"].sum().sort_values(ascending=False).reset_index()
@@ -234,27 +243,26 @@ with tab1:
         ).properties(height=400)
         st.altair_chart(graf5, use_container_width=True)
 
-    # --- Tabla final ---
+    # Tabla detalle ventas
     st.markdown("## 📋 Detalle de Ventas")
     st.dataframe(df_filtrado.sort_values(by="Subtotal Neto", ascending=False), use_container_width=True)
 
 with tab2:
     st.markdown("## 🔍 Análisis ABC de Productos")
 
-    # Opción de filtrar por mes o total
     opcion_abc = st.radio("Ver análisis ABC por:", ("Total", "Por Mes"))
 
     if opcion_abc == "Total":
         df_abc = df_filtrado.copy()
     else:
-        mes_abc = st.selectbox("Seleccionar Mes para ABC", meses[1:])  # excluye "Todos"
+        mes_abc = st.selectbox("Seleccionar Mes para ABC", meses[1:])  # excluir "Todos"
         df_abc = df_filtrado[df_filtrado[col_mes] == mes_abc]
 
     if df_abc.empty:
         st.warning("No hay datos para esta selección.")
     else:
         df_abc_result = calcular_abc(df_abc)
-
+        # Mostrar tabla ordenada por categoría ABC
         st.dataframe(df_abc_result[[col_producto, 'Subtotal Neto', 'PorcAcum', 'Categoria']].sort_values(by='Categoria'))
 
         # Gráfico ABC
@@ -277,12 +285,14 @@ with tab3:
     if seleccion_temporada == "Todas":
         st.info("Selecciona una temporada en el filtro lateral para ver datos por temporada.")
     else:
-        resumen_temp = df_filtrado.groupby('Temporada').sum()[medidas].loc[seleccion_temporada]
+        resumen_temp = df_filtrado[df_filtrado['Temporada'] == seleccion_temporada][medidas].sum()
         st.write(f"### Resumen Temporada: {seleccion_temporada}")
         for m in medidas:
-            st.metric(m, formato_moneda(resumen_temp[m]) if m != 'Cantidad' else f"{int(resumen_temp[m]):,}".replace(",", "."))
+            valor = resumen_temp[m]
+            display_val = formato_moneda(valor) if m != 'Cantidad' else f"{int(valor):,}".replace(",", ".")
+            st.metric(m, display_val)
 
-        # Gráfico ventas por producto en temporada
+        # Top productos temporada
         ventas_temp_prod = df_filtrado[df_filtrado['Temporada'] == seleccion_temporada].groupby(col_producto)['Subtotal Neto'].sum().sort_values(ascending=False).reset_index()
         st.markdown("#### Top Productos en Temporada")
         graf_temp_prod = alt.Chart(ventas_temp_prod.head(10)).mark_bar().encode(
@@ -291,5 +301,4 @@ with tab3:
             tooltip=[alt.Tooltip('Subtotal Neto', format=",.0f")]
         ).properties(height=400)
         st.altair_chart(graf_temp_prod, use_container_width=True)
-
 
