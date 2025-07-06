@@ -1,9 +1,20 @@
 # Dashboard de Ventas - Botillería
 
-## Descripción
+## 📝 Descripción
+Este proyecto es un dashboard interactivo en **Streamlit**  para visualizar y analizar ventas de una botillería. Permite cargar un archivo CSV con ventas, comparar con un catálogo en Excel y generar distintos análisis como:
 
-Este proyecto es un dashboard interactivo desarrollado en **Streamlit** para analizar datos de ventas desde un archivo CSV, compararlos con un catálogo de productos en Excel, y obtener insights útiles para la gestión comercial.  
-Incluye filtros, gráficos y reportes que ayudan a identificar productos vendidos, analizar categorías, y detectar inconsistencias.
+Resumen de ventas
+
+- Análisis ABC
+
+- Detalle diario por categoría
+
+- Detección de productos repetidos y no registrados
+
+La herramienta proporciona visualizaciones interactivas, filtros personalizables y análisis automatizados que facilitan la identificación de productos con mayor rotación, evaluación de categorías de venta y detección de inconsistencias en los datos.
+Está diseñada para apoyar al propietario en la toma de decisiones estratégicas y en la mantención de un catálogo de productos ordenado y consistente.
+
+
 
 ---
 
@@ -14,18 +25,28 @@ import streamlit as st
 import pandas as pd
 import json
 import altair as alt
+```
 
-# --------------------------------------------
-# Configuración inicial de la página
-# --------------------------------------------
-st.set_page_config(page_title="Dashboard Botillería", layout="wide")
+```
+📁 proyecto_botilleria/
+│
+├── dashboard.py              # Código principal de Streamlit
+├── report.json               # Configuración de rutas (CSV y catálogo)
+├── README.md                 # Este archivo de documentación
+└── requirements.txt          # Dependencias del proyecto
+```
+
+---
+## Configuración inicial de la página
+---
+```st.set_page_config(page_title="Dashboard Botillería", layout="wide")
 st.title("📊 Dashboard de Ventas - Visión Propietario")
-
-# --------------------------------------------
+```
+---
 # Función para cargar archivo JSON de configuración
 # Usamos cache para no recargar innecesariamente
-# --------------------------------------------
-@st.cache_data
+---
+```@st.cache_data
 def cargar_config(path="report.json"):
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -34,24 +55,24 @@ def cargar_config(path="report.json"):
     except Exception as e:
         st.error(f"Error leyendo JSON: {e}")
         return None
-
-config = cargar_config()
+```
+```config = cargar_config()
 if not config:
     st.stop()  # Detenemos si no carga la configuración
-
-# --------------------------------------------
-# Extraemos URL para CSV de ventas desde el JSON
-# Validamos que exista
-# --------------------------------------------
+```
+---
+## Extraemos URL para CSV de ventas desde el JSON
+## Validamos que exista
+---
 csv_url = config.get("dataSource", {}).get("filename", "")
 if not csv_url:
     st.error("No se encontró URL CSV en JSON.")
     st.stop()
 
-# --------------------------------------------
-# Extraemos URL para catálogo de productos (Excel)
-# No es obligatorio, pero algunas pestañas usan esto
-# --------------------------------------------
+---
+## Extraemos URL para catálogo de productos (Excel)
+## No es obligatorio, pero algunas pestañas usan esto
+---
 catalogo_url = config.get("catalogoProductos", {}).get("url", "")
 if not catalogo_url:
     st.warning("No se encontró URL del catálogo en JSON, la pestaña de productos repetidos no funcionará.")
@@ -223,47 +244,47 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "🧾 Productos Repetidos / No Registrados"
 ])
 
-# ---------------------------
+---
 # PESTAÑA 1: Resumen y detalle general
-# ---------------------------
-with tab1:
+---
+```with tab1:
     st.markdown("## 📌 Resumen General")
-
+```
     # Sumariza las medidas importantes (subtotal, margen, cantidad, etc)
     resumen = {m: df_filtrado[m].sum() for m in medidas}
 
     # Mostrar métricas en columnas horizontales
-    cols_metrics = st.columns(len(medidas))
+ ```   cols_metrics = st.columns(len(medidas))
     for idx, m in enumerate(medidas):
         valor = resumen.get(m, 0)
         # Cantidad sin decimales y moneda con formato chileno
         display_val = f"{int(valor):,}".replace(",", ".") if m == 'Cantidad' else formato_moneda(valor)
         cols_metrics[idx].metric(m, display_val)
-
+```
     # Mostrar cantidad vendida por producto en la categoría y mes filtrados
-    st.markdown(f"## 🛒 Cantidades Vendidas por Producto en categoría '{seleccion_tipo_producto or 'Todos'}' " +
+ ```   st.markdown(f"## 🛒 Cantidades Vendidas por Producto en categoría '{seleccion_tipo_producto or 'Todos'}' " +
                 (f"y Mes '{seleccion_mes}'" if seleccion_mes != "Todos" else "(todo el tiempo)"))
-
-    df_cantidades = df_filtrado.copy()
+```
+```    df_cantidades = df_filtrado.copy()
     if seleccion_producto != "Todos":
         df_cantidades = df_cantidades[df_cantidades[col_producto] == seleccion_producto]
-
-    cantidades_por_producto = df_cantidades.groupby(col_producto)['Cantidad'].sum().reset_index().sort_values(by='Cantidad', ascending=False)
+```
+  ```  cantidades_por_producto = df_cantidades.groupby(col_producto)['Cantidad'].sum().reset_index().sort_values(by='Cantidad', ascending=False)
     st.dataframe(cantidades_por_producto, use_container_width=True)
-
+```
     # Detalle diario de ventas para producto seleccionado o todos
-    st.markdown(f"## 📅 Detalle Diario de Ventas " +
+ ```   st.markdown(f"## 📅 Detalle Diario de Ventas " +
                 (f"para producto '{seleccion_producto}'" if seleccion_producto != "Todos" else "para todos los productos"))
-
-    if seleccion_producto == "Todos":
+```
+  ```  if seleccion_producto == "Todos":
         # Pivot table para mostrar cantidad diaria por producto
         detalle_diario = df_filtrado.groupby([col_producto, col_fecha])['Cantidad'].sum().reset_index()
         pivot_diario = detalle_diario.pivot(index=col_producto, columns=col_fecha, values='Cantidad').fillna(0)
         pivot_diario.columns = pivot_diario.columns.strftime('%d/%m/%Y')
         st.dataframe(pivot_diario.astype(int), use_container_width=True)
-
+```
         # Gráfico línea diario para producto seleccionado en dropdown
-        prod_para_graf = st.selectbox("Seleccionar Producto para gráfico diario", ["Todos"] + sorted(detalle_diario[col_producto].unique()))
+  ```      prod_para_graf = st.selectbox("Seleccionar Producto para gráfico diario", ["Todos"] + sorted(detalle_diario[col_producto].unique()))
         if prod_para_graf != "Todos":
             df_graf = detalle_diario[detalle_diario[col_producto] == prod_para_graf]
             graf_diario = alt.Chart(df_graf).mark_line(point=True).encode(
@@ -273,8 +294,9 @@ with tab1:
             ).properties(height=300)
             st.altair_chart(graf_diario, use_container_width=True)
     else:
-        # Detalle diario para producto único
-        detalle_diario = df_filtrado.groupby(col_fecha)['Cantidad'].sum().reset_index().sort_values(col_fecha)
+    ```
+    # Detalle diario para producto único
+  ```      detalle_diario = df_filtrado.groupby(col_fecha)['Cantidad'].sum().reset_index().sort_values(col_fecha)
         st.dataframe(detalle_diario, use_container_width=True)
 
         graf_diario = alt.Chart(detalle_diario).mark_line(point=True).encode(
@@ -283,7 +305,7 @@ with tab1:
             tooltip=[alt.Tooltip(col_fecha, title="Fecha", format='%d/%m/%Y'), alt.Tooltip('Cantidad')]
         ).properties(height=300)
         st.altair_chart(graf_diario, use_container_width=True)
-
+```
 # ---------------------------
 # PESTAÑA 2: Análisis ABC
 # ---------------------------
