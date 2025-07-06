@@ -306,14 +306,17 @@ with tab4:
     if df_catalogo.empty:
         st.warning("No se pudo cargar el catálogo. Por favor revisa la URL en report.json")
     else:
-        # Columnas clave en catálogo (ajustar si cambia el formato)
+        # Detectar columnas clave en catálogo
         col_nom_prod = None
         col_sku = None
         for c in df_catalogo.columns:
             if "nombre" in c.lower():
                 col_nom_prod = c
-            if "sku" in c.lower():
+            if "sku" == c.lower():
                 col_sku = c
+
+        st.write(f"Columna nombre producto detectada en catálogo: {col_nom_prod}")
+        st.write(f"Columna SKU detectada en catálogo: {col_sku}")
 
         if not col_nom_prod:
             st.error("No se encontró columna 'Nombre del Producto' en el catálogo.")
@@ -327,7 +330,7 @@ with tab4:
             dup_skus = df_catalogo[df_catalogo.duplicated(subset=[col_sku], keep=False)]
             st.dataframe(dup_skus.sort_values(col_sku), use_container_width=True)
 
-        # Productos vendidos en CSV no encontrados en catálogo por nombre
+        # Productos vendidos en CSV no encontrados en catálogo por nombre (normalizados)
         st.write("### Productos vendidos que NO están en el catálogo (por nombre):")
         nombres_catalogo = df_catalogo[col_nom_prod].dropna().str.strip().str.lower().unique()
         nombres_ventas = df[col_producto].dropna().str.strip().str.lower().unique()
@@ -337,9 +340,8 @@ with tab4:
         else:
             st.success("Todos los productos vendidos están registrados en el catálogo.")
 
-        # Opcional: productos vendidos que no estén en catálogo por SKU (si tienes esa columna en ventas)
+        # Productos vendidos con SKU no encontrados en catálogo
         if col_sku:
-            # Buscar columna SKU en ventas (similar método encontrar_col)
             col_sku_ventas = encontrar_col("sku")
             if col_sku_ventas:
                 st.write("### Productos vendidos con SKU que NO están en el catálogo:")
@@ -350,4 +352,5 @@ with tab4:
                     st.dataframe(pd.DataFrame(skus_no_catalogo, columns=["SKU vendido no registrado"]))
                 else:
                     st.success("Todos los SKUs vendidos están registrados en el catálogo.")
+
 
