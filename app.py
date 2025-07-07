@@ -193,26 +193,8 @@ with tab1:
     if seleccion_producto != "Todos":
         df_cantidades = df_cantidades[df_cantidades[col_producto] == seleccion_producto]
 
-    # --- Cálculo de vendidos y no vendidos ---
-    ventas_agrupadas = df_cantidades.groupby(col_producto)['Cantidad'].sum().reset_index()
-
-    if seleccion_tipo_producto != "Todos":
-        productos_en_categoria = df[df['TipoProducto'] == seleccion_tipo_producto][col_producto].drop_duplicates()
-    else:
-        productos_en_categoria = df[col_producto].drop_duplicates()
-
-    todos_los_productos = pd.DataFrame({col_producto: productos_en_categoria})
-    ventas_completas = todos_los_productos.merge(ventas_agrupadas, on=col_producto, how='left')
-    ventas_completas['Cantidad'] = ventas_completas['Cantidad'].fillna(0).astype(int)
-
-    vendidos = ventas_completas[ventas_completas['Cantidad'] > 0].sort_values(by='Cantidad', ascending=False)
-    no_vendidos = ventas_completas[ventas_completas['Cantidad'] == 0].sort_values(by=col_producto)
-
-    st.markdown("### ✅ Productos Vendidos")
-    st.dataframe(vendidos, use_container_width=True)
-
-    st.markdown("### ❌ Productos No Vendidos")
-    st.dataframe(no_vendidos, use_container_width=True)
+    cantidades_por_producto = df_cantidades.groupby(col_producto)['Cantidad'].sum().reset_index().sort_values(by='Cantidad', ascending=False)
+    st.dataframe(cantidades_por_producto, use_container_width=True)
 
     st.markdown(f"## 📅 Detalle Diario de Ventas " +
                 (f"para producto '{seleccion_producto}'" if seleccion_producto != "Todos" else "para todos los productos"))
@@ -243,6 +225,21 @@ with tab1:
 
         styled_table = pivot_diario.style.apply(resaltar_totales, axis=1).apply(resaltar_columna_totales, axis=None)
         st.dataframe(styled_table, use_container_width=True)
+
+        # --- NUEVO: mostrar productos de la categoría seleccionada que no se han vendido ---
+        if seleccion_tipo_producto != "Todos" and seleccion_tipo_producto != None:
+            # Obtener productos de la categoría completa
+            productos_en_categoria = df[df[col_tipo_producto] == seleccion_tipo_producto][col_producto].drop_duplicates()
+            # Productos vendidos en el filtro actual
+            productos_vendidos = df_filtrado[col_producto].drop_duplicates()
+            # Filtrar productos no vendidos
+            productos_no_vendidos = productos_en_categoria[~productos_en_categoria.isin(productos_vendidos)]
+            
+            st.markdown(f"## 🚫 Productos SIN ventas en categoría '{seleccion_tipo_producto}'")
+            if not productos_no_vendidos.empty:
+                st.dataframe(productos_no_vendidos.to_frame(name=col_producto), use_container_width=True)
+            else:
+                st.info("Todos los productos de esta categoría han sido vendidos en el periodo seleccionado.")
 
         prod_para_graf = st.selectbox("Seleccionar Producto para gráfico diario", ["Todos"] + sorted(detalle_diario[col_producto].unique()))
         if prod_para_graf != "Todos":
