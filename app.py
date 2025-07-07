@@ -463,7 +463,7 @@ with tab5:
                     st.dataframe(df_stock_filtrado[columnas_mostrar], use_container_width=True)
 
                 # KPIs resumen por categoría
-                    palabras_clave = ['stock','despachar','disponible','recibir']
+                    palabras_clave = ['stock','cantidad por despachar','cantidad disponible','por recibir']
                     columnas_resumen = [c for c in columnas_mostrar if any(p in c.lower() for p in palabras_clave)]
                 
 
