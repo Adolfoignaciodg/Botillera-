@@ -191,6 +191,8 @@ import io
 
 import io
 
+import io
+
 with tab1:
     st.markdown("## 📌 Resumen General")
     resumen = {m: df_filtrado[m].sum() for m in medidas}
@@ -217,43 +219,35 @@ with tab1:
         detalle_diario = df_filtrado.groupby([col_producto, col_fecha])['Cantidad'].sum().reset_index()
         pivot_diario = detalle_diario.pivot(index=col_producto, columns=col_fecha, values='Cantidad').fillna(0)
         pivot_diario = pivot_diario.sort_index(axis=1)
+        fechas_formateadas = pivot_diario.columns.strftime('%d/%m/%Y')
+        pivot_diario.columns = fechas_formateadas
 
-        # Calcular total por producto (fila)
+        # Agregar totales por fila y columna
         pivot_diario['Total'] = pivot_diario.sum(axis=1)
-
-        # Calcular total por fecha y total general (columna)
         total_col = pivot_diario.sum(axis=0)
-        total_col.name = 'TOTAL'
-        total_row = pd.DataFrame([total_col.values], columns=pivot_diario.columns, index=['TOTAL'])
+        total_col.name = 'Total'
+        pivot_diario = pd.concat([pivot_diario, pd.DataFrame([total_col])])
+        pivot_diario = pivot_diario.astype(int)
 
-        # Unir total final con los datos
-        pivot_diario = pd.concat([pivot_diario, total_row])
-
-        # Resetear índice para manipular columnas
+        # Mostrar tabla separando totales para evitar errores de .style
         pivot_diario_reset = pivot_diario.reset_index()
+        ultima_fila = pivot_diario_reset.iloc[[-1]]
+        otras_filas = pivot_diario_reset.iloc[:-1]
 
-        # Ordenar columnas: producto, total, luego fechas
-        cols_fechas = [c for c in pivot_diario_reset.columns if c not in [col_producto, 'Total']]
-        pivot_diario_reset = pivot_diario_reset[[col_producto, 'Total'] + cols_fechas]
+        st.dataframe(otras_filas, use_container_width=True)
+        st.markdown("### 🔢 Totales Generales")
+        try:
+            st.dataframe(
+                ultima_fila.style.set_properties(**{
+                    'background-color': '#d9ead3',
+                    'font-weight': 'bold'
+                }),
+                use_container_width=True
+            )
+        except:
+            st.dataframe(ultima_fila, use_container_width=True)
 
-        # Convertir datos numéricos a enteros (excepto producto)
-        for c in pivot_diario_reset.columns:
-            if c != col_producto:
-                pivot_diario_reset[c] = pivot_diario_reset[c].astype(int)
-
-        # Función para resaltar fila TOTAL
-        def resaltar_totales(fila):
-            if fila[col_producto] == 'TOTAL':
-                return ['background-color: #d9ead3; font-weight: bold'] * len(fila)
-            else:
-                return [''] * len(fila)
-
-        # Mostrar tabla con estilos usando st.table para evitar error
-        st.table(
-            pivot_diario_reset.style.apply(resaltar_totales, axis=1)
-        )
-
-        # Mostrar productos sin ventas en categoría si corresponde
+        # Mostrar productos sin ventas
         if seleccion_tipo_producto != "Todos" and seleccion_tipo_producto is not None:
             productos_en_categoria = df[df[col_tipo_producto] == seleccion_tipo_producto][col_producto].drop_duplicates()
             productos_vendidos = df_filtrado[col_producto].drop_duplicates()
@@ -291,7 +285,6 @@ with tab1:
             ]
         ).properties(height=300)
         st.altair_chart(graf_diario, use_container_width=True)
-
 
 with tab2:
     st.markdown("## 🔍 Análisis ABC de Productos")
