@@ -223,7 +223,6 @@ with tab1:
 
         # Reordenar columnas para que quede: Producto | Total | Fechas...
         columnas = pivot_diario_reset.columns.tolist()
-        # Mover columna "Total" después de producto
         columnas.remove('Total')
         columnas.remove(col_producto)
         columnas_finales = [col_producto, 'Total'] + columnas
@@ -234,7 +233,7 @@ with tab1:
             if c != col_producto:
                 pivot_diario_reset[c] = pivot_diario_reset[c].astype(int)
 
-        # Mostrar tabla con estilo para la fila TOTAL GENERAL
+        # Función para resaltar fila TOTAL GENERAL
         def highlight_totales(row):
             return ['background-color: #d9ead3; font-weight: bold' if row.name == len(pivot_diario_reset)-1 else '' for _ in row]
 
