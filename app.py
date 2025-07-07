@@ -270,6 +270,9 @@ with tab3:
     opciones_meses = meses_disponibles.apply(lambda x: f"{x['MesNum']:02d} - {x['MesNombre']}", axis=1).tolist()
     mes_seleccionado = st.selectbox("Seleccionar Mes", opciones_meses)
 
+    # Extraer número de mes seleccionado (los primeros 2 caracteres)
+    mes_num = int(mes_seleccionado.split(" - ")[0])
+
     
     # Extraer número de mes seleccionado (los primeros 2 caracteres)
     dias_disponibles = df[(df['Año'] == año_seleccionado) & (df['MesNum'] == mes_num)]['Día'].dropna().unique()
