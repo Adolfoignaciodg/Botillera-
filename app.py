@@ -317,43 +317,42 @@ with tab2:
                     lambda x: x[valor_col] / x['Cantidad'] if x['Cantidad'] > 0 else 0, axis=1
                 )
 
-            # Convertir columnas a formato CLP con separador de miles
-            df_grouped[columna_valor] = df_grouped[columna_valor].apply(lambda x: f"${x:,.0f}".replace(",", "."))
-            df_grouped['Cantidad'] = df_grouped['Cantidad'].apply(lambda x: f"{x:,.0f}".replace(",", "."))
-            df_grouped['PorcAcum'] = (df_grouped['PorcAcum'] * 100).round(2).astype(str) + '%'
-            if 'Margen por Unidad' in df_grouped.columns:
-                df_grouped['Margen por Unidad'] = df_grouped['Margen por Unidad'].apply(lambda x: f"${x:,.0f}".replace(",", "."))
-
             return df_grouped
 
         df_abc_result = calcular_abc(df_abc, valor_col=columna_valor)
 
-        # Mostrar tabla
+        # Crear copia para mostrar en tabla con formato CLP
+        df_tabla = df_abc_result.copy()
+        df_tabla[columna_valor] = df_tabla[columna_valor].apply(lambda x: f"${x:,.0f}".replace(",", "."))
+        df_tabla['Cantidad'] = df_tabla['Cantidad'].apply(lambda x: f"{x:,.0f}".replace(",", "."))
+        df_tabla['PorcAcum'] = (df_abc_result['PorcAcum'] * 100).round(2).astype(str) + '%'
+        if 'Margen por Unidad' in df_tabla.columns:
+            df_tabla['Margen por Unidad'] = df_tabla['Margen por Unidad'].apply(lambda x: f"${x:,.0f}".replace(",", "."))
+
+        # Mostrar tabla con formato
         columnas_mostrar = [col_producto, columna_valor, 'Cantidad', 'PorcAcum', 'tipo de producto']
-        if 'Margen por Unidad' in df_abc_result.columns:
+        if 'Margen por Unidad' in df_tabla.columns:
             columnas_mostrar.append('Margen por Unidad')
 
         st.dataframe(
-            df_abc_result[columnas_mostrar].sort_values(by='tipo de producto'),
+            df_tabla[columnas_mostrar].sort_values(by='tipo de producto'),
             use_container_width=True
         )
 
-        # Gráfico ABC con unidades en tooltip
+        # Gráfico con valores reales (sin formatear)
         graf_abc = alt.Chart(df_abc_result).mark_bar().encode(
             x=alt.X(col_producto, sort='-y'),
             y=alt.Y(columna_valor, title=f'{columna_valor} CLP'),
             color=alt.Color('tipo de producto', scale=alt.Scale(domain=['A', 'B', 'C'], range=['#1f77b4', '#ff7f0e', '#2ca02c'])),
             tooltip=[
                 alt.Tooltip(col_producto, title='Producto'),
-                alt.Tooltip(columna_valor, title=columna_valor),
-                alt.Tooltip('Cantidad', title='Unidades Vendidas'),
+                alt.Tooltip(columna_valor, format=",.0f", title=columna_valor),
+                alt.Tooltip('Cantidad', format=",.0f", title='Unidades Vendidas'),
                 alt.Tooltip('tipo de producto', title='Clasificación ABC')
             ]
         ).properties(height=400)
 
         st.altair_chart(graf_abc, use_container_width=True)
-
-
 
 
 with tab3:
