@@ -227,7 +227,7 @@ with tab1:
             return styles
 
         styled_table = pivot_diario.style.apply(resaltar_totales, axis=1).apply(resaltar_columna_totales, axis=None)
-        st.dataframe(styled_table, use_container_width=True)
+        st.write(styled_table)
 
         # --- NUEVO: mostrar productos de la categoría seleccionada que no se han vendido ---
         if seleccion_tipo_producto != "Todos" and seleccion_tipo_producto != None:
