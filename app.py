@@ -193,8 +193,26 @@ with tab1:
     if seleccion_producto != "Todos":
         df_cantidades = df_cantidades[df_cantidades[col_producto] == seleccion_producto]
 
-    cantidades_por_producto = df_cantidades.groupby(col_producto)['Cantidad'].sum().reset_index().sort_values(by='Cantidad', ascending=False)
-    st.dataframe(cantidades_por_producto, use_container_width=True)
+    # --- Cálculo de vendidos y no vendidos ---
+    ventas_agrupadas = df_cantidades.groupby(col_producto)['Cantidad'].sum().reset_index()
+
+    if seleccion_tipo_producto != "Todos":
+        productos_en_categoria = df[df['TipoProducto'] == seleccion_tipo_producto][col_producto].drop_duplicates()
+    else:
+        productos_en_categoria = df[col_producto].drop_duplicates()
+
+    todos_los_productos = pd.DataFrame({col_producto: productos_en_categoria})
+    ventas_completas = todos_los_productos.merge(ventas_agrupadas, on=col_producto, how='left')
+    ventas_completas['Cantidad'] = ventas_completas['Cantidad'].fillna(0).astype(int)
+
+    vendidos = ventas_completas[ventas_completas['Cantidad'] > 0].sort_values(by='Cantidad', ascending=False)
+    no_vendidos = ventas_completas[ventas_completas['Cantidad'] == 0].sort_values(by=col_producto)
+
+    st.markdown("### ✅ Productos Vendidos")
+    st.dataframe(vendidos, use_container_width=True)
+
+    st.markdown("### ❌ Productos No Vendidos")
+    st.dataframe(no_vendidos, use_container_width=True)
 
     st.markdown(f"## 📅 Detalle Diario de Ventas " +
                 (f"para producto '{seleccion_producto}'" if seleccion_producto != "Todos" else "para todos los productos"))
@@ -252,6 +270,7 @@ with tab1:
             ]
         ).properties(height=300)
         st.altair_chart(graf_diario, use_container_width=True)
+
 
 with tab2:
     st.markdown("## 🔍 Análisis ABC de Productos")
