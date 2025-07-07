@@ -5,7 +5,7 @@ import altair as alt
 
 # Configuración de la página
 st.set_page_config(page_title="Dashboard Botillería", layout="wide")
-st.title("📊 Dashboard de Ventas - Visión Propietario")
+st.title("📊 Dashboard de Ventas")
 
 # --- Carga y validación del archivo JSON de configuración ---
 @st.cache_data
