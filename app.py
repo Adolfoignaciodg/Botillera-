@@ -432,9 +432,9 @@ with tab5:
                 "Cantidad por Despachar",
                 "Cantidad Disponible",
                 "Por Recibir",
-                "Costo Neto Promedio",
-                "Precio Venta",
-                "Margen"
+                "Costo Neto Prom. Unitario",
+                "Precio Venta Bruto",
+                "Margen Unitario"
             ]
             # Mapear columnas según las que existan realmente en el archivo
             for pc in posibles_cols:
