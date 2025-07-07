@@ -213,35 +213,40 @@ with tab1:
         # Agregar columna Total (suma por fila)
         pivot_diario['Total'] = pivot_diario.sum(axis=1)
 
+        # Agregar fila Total General (suma por columnas)
+        total_col = pivot_diario.sum(axis=0)
+        total_col.name = 'TOTAL GENERAL'
+        pivot_diario = pd.concat([pivot_diario, pd.DataFrame([total_col])])
+
         # Resetear índice para tener la columna producto como columna normal
-        pivot_diario = pivot_diario.reset_index()
+        pivot_diario_reset = pivot_diario.reset_index()
 
         # Reordenar columnas para que quede: Producto | Total | Fechas...
-        columnas_finales = [col_producto, 'Total'] + [c for c in pivot_diario.columns if c not in [col_producto, 'Total']]
-        pivot_diario = pivot_diario[columnas_finales]
+        columnas = pivot_diario_reset.columns.tolist()
+        # Mover columna "Total" después de producto
+        columnas.remove('Total')
+        columnas.remove(col_producto)
+        columnas_finales = [col_producto, 'Total'] + columnas
+        pivot_diario_reset = pivot_diario_reset[columnas_finales]
 
-        # Convertir valores (excepto producto) a int
+        # Convertir valores numéricos a int donde corresponda (excepto producto)
         for c in columnas_finales:
             if c != col_producto:
-                pivot_diario[c] = pivot_diario[c].astype(int)
+                pivot_diario_reset[c] = pivot_diario_reset[c].astype(int)
 
-        # Mostrar tabla con totales por producto al lado del nombre
-        st.dataframe(pivot_diario, use_container_width=True)
+        # Mostrar tabla con estilo para la fila TOTAL GENERAL
+        def highlight_totales(row):
+            return ['background-color: #d9ead3; font-weight: bold' if row.name == len(pivot_diario_reset)-1 else '' for _ in row]
 
-        # Totales generales (sumar columnas, excepto producto)
-        total_general = pivot_diario.drop(columns=[col_producto]).sum().to_frame().T
-        total_general[col_producto] = "TOTAL GENERAL"
-        # Reordenar columnas igual que tabla
-        total_general = total_general[[col_producto] + [c for c in total_general.columns if c != col_producto]]
+        st.dataframe(
+            pivot_diario_reset.style.apply(highlight_totales, axis=1),
+            use_container_width=True
+        )
 
-        st.markdown("### 🔢 Totales Generales")
-        st.dataframe(total_general, use_container_width=True)
-
-        # Botón para descargar en Excel (tabla + totales juntos)
-        to_download = pd.concat([pivot_diario, total_general], ignore_index=True)
+        # Botón para descargar en Excel (tabla con totales incluidos)
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            to_download.to_excel(writer, index=False, sheet_name='Detalle Diario')
+            pivot_diario_reset.to_excel(writer, index=False, sheet_name='Detalle Diario')
             writer.save()
         data_excel = output.getvalue()
 
@@ -291,6 +296,7 @@ with tab1:
             ]
         ).properties(height=300)
         st.altair_chart(graf_diario, use_container_width=True)
+
 
 with tab2:
     st.markdown("## 🔍 Análisis ABC de Productos")
