@@ -406,7 +406,7 @@ with tab5:
         # Buscar columna Categoría (sensible a mayúsculas/minúsculas)
         col_categoria_stock = None
         for c in df_stock.columns:
-            if "categor" in c.lower():
+            if "Tipo de Producto" in c.lower():
                 col_categoria_stock = c
                 break
 
