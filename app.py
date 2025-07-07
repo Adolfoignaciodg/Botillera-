@@ -203,7 +203,13 @@ with tab1:
         detalle_diario = df_filtrado.groupby([col_producto, col_fecha])['Cantidad'].sum().reset_index()
         pivot_diario = detalle_diario.pivot(index=col_producto, columns=col_fecha, values='Cantidad').fillna(0)
         pivot_diario.columns = pivot_diario.columns.strftime('%d/%m/%Y')
-        st.dataframe(pivot_diario.astype(int), use_container_width=True)
+        pivot_diario['Total'] = pivot_diario.sum(axis=1)
+        total_col = pivot_diario.sum(axis=0)
+        total_col.name = 'Total'
+        pivot_diario = pd.concat([pivot_diario, pd.DataFrame([total_col])])
+        pivot_diario = pivot_diario.astype(int)
+        st.dataframe(pivot_diario, use_container_width=True)
+       
 
         prod_para_graf = st.selectbox("Seleccionar Producto para gráfico diario", ["Todos"] + sorted(detalle_diario[col_producto].unique()))
         if prod_para_graf != "Todos":
