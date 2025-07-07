@@ -205,7 +205,6 @@ with tab1:
         pivot_diario = pivot_diario.sort_index(axis=1)
         fechas_formateadas = pivot_diario.columns.strftime('%d/%m/%Y')
         pivot_diario.columns = fechas_formateadas
-        
 
         # Agregar totales por fila y columna
         pivot_diario['Total'] = pivot_diario.sum(axis=1)
@@ -226,18 +225,19 @@ with tab1:
                 styles['Total'] = 'background-color: #d9ead3'
             return styles
 
-        styled_table = pivot_diario.style.apply(resaltar_totales, axis=1).apply(resaltar_columna_totales, axis=None)
-        st.write(styled_table)
+        try:
+            styled_table = pivot_diario.style.apply(resaltar_totales, axis=1).apply(resaltar_columna_totales, axis=None)
+            st.dataframe(styled_table, use_container_width=True)
+        except Exception:
+            st.warning("No se pudieron aplicar estilos en esta tabla. Mostrando sin formato.")
+            st.dataframe(pivot_diario, use_container_width=True)
 
-        # --- NUEVO: mostrar productos de la categoría seleccionada que no se han vendido ---
-        if seleccion_tipo_producto != "Todos" and seleccion_tipo_producto != None:
-            # Obtener productos de la categoría completa
+        # Mostrar productos sin ventas
+        if seleccion_tipo_producto != "Todos" and seleccion_tipo_producto is not None:
             productos_en_categoria = df[df[col_tipo_producto] == seleccion_tipo_producto][col_producto].drop_duplicates()
-            # Productos vendidos en el filtro actual
             productos_vendidos = df_filtrado[col_producto].drop_duplicates()
-            # Filtrar productos no vendidos
             productos_no_vendidos = productos_en_categoria[~productos_en_categoria.isin(productos_vendidos)]
-            
+
             st.markdown(f"## 🚫 Productos SIN ventas en categoría '{seleccion_tipo_producto}'")
             if not productos_no_vendidos.empty:
                 st.dataframe(productos_no_vendidos.to_frame(name=col_producto), use_container_width=True)
@@ -270,7 +270,6 @@ with tab1:
             ]
         ).properties(height=300)
         st.altair_chart(graf_diario, use_container_width=True)
-
 
 with tab2:
     st.markdown("## 🔍 Análisis ABC de Productos")
