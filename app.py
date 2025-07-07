@@ -214,44 +214,36 @@ with tab1:
         pivot_diario = detalle_diario.pivot(index=col_producto, columns=col_fecha, values='Cantidad').fillna(0)
         pivot_diario = pivot_diario.sort_index(axis=1)
 
-        # Formatear fechas
-        fechas_formateadas = pivot_diario.columns.strftime('%d/%m/%Y')
-        pivot_diario.columns = fechas_formateadas
+        # Formatear columnas fechas a dd/mm/yyyy si son datetime
+        if isinstance(pivot_diario.columns[0], pd.Timestamp):
+            pivot_diario.columns = pivot_diario.columns.strftime('%d/%m/%Y')
+        else:
+            pivot_diario.columns = pivot_diario.columns.astype(str)
 
+        # Agregar columna Total (suma por fila)
         pivot_diario['Total'] = pivot_diario.sum(axis=1)
+
+        # Agregar fila Total General (suma por columnas)
         total_col = pivot_diario.sum(axis=0)
         total_col.name = 'TOTAL GENERAL'
         pivot_diario = pd.concat([pivot_diario, pd.DataFrame([total_col])])
 
+        # Resetear índice
         pivot_diario_reset = pivot_diario.reset_index()
 
-        # Reordenar columnas si existen
+        # Reordenar columnas: Producto, Total, fechas...
         columnas = pivot_diario_reset.columns.tolist()
-        columnas_finales = []
-
-        if col_producto in columnas:
-            columnas_finales.append(col_producto)
-        if 'Total' in columnas:
-            columnas_finales.append('Total')
-
-        otras_columnas = [col for col in columnas if col not in columnas_finales]
-        columnas_finales += otras_columnas
-
+        columnas_finales = [col_producto, 'Total'] + [c for c in columnas if c not in [col_producto, 'Total']]
         pivot_diario_reset = pivot_diario_reset[columnas_finales]
 
-        # Convertir columnas a int donde se pueda
+        # Convertir a int donde corresponda
         for c in columnas_finales:
             if c != col_producto:
-                try:
-                    pivot_diario_reset[c] = pivot_diario_reset[c].astype(int)
-                except:
-                    pass  # en caso de columnas no numéricas como fechas mal parseadas
+                pivot_diario_reset[c] = pivot_diario_reset[c].astype(int)
 
-        # Fila resaltada
+        # Estilo para TOTAL GENERAL
         def highlight_totales(row):
-            if row.name == len(pivot_diario_reset) - 1:
-                return ['background-color: #d9ead3; font-weight: bold'] * len(row)
-            return [''] * len(row)
+            return ['background-color: #d9ead3; font-weight: bold' if row.name == len(pivot_diario_reset) - 1 else '' for _ in row]
 
         st.dataframe(
             pivot_diario_reset.style.apply(highlight_totales, axis=1),
@@ -262,16 +254,14 @@ with tab1:
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             pivot_diario_reset.to_excel(writer, index=False, sheet_name='Detalle Diario')
-        data_excel = output.getvalue()
-
         st.download_button(
             label="📥 Descargar detalle diario con totales en Excel",
-            data=data_excel,
+            data=output.getvalue(),
             file_name='detalle_diario_ventas.xlsx',
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
 
-        # Productos sin ventas
+        # Mostrar productos sin ventas en la categoría
         if seleccion_tipo_producto != "Todos" and seleccion_tipo_producto is not None:
             productos_en_categoria = df[df[col_tipo_producto] == seleccion_tipo_producto][col_producto].drop_duplicates()
             productos_vendidos = df_filtrado[col_producto].drop_duplicates()
@@ -283,7 +273,7 @@ with tab1:
             else:
                 st.info("Todos los productos de esta categoría han sido vendidos en el periodo seleccionado.")
 
-        # Gráfico por producto
+        # Gráfico diario por producto
         prod_para_graf = st.selectbox("Seleccionar Producto para gráfico diario", ["Todos"] + sorted(detalle_diario[col_producto].unique()))
         if prod_para_graf != "Todos":
             df_graf = detalle_diario[detalle_diario[col_producto] == prod_para_graf]
@@ -310,8 +300,6 @@ with tab1:
             ]
         ).properties(height=300)
         st.altair_chart(graf_diario, use_container_width=True)
-
-
 
 with tab2:
     st.markdown("## 🔍 Análisis ABC de Productos")
