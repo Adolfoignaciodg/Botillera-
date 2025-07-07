@@ -292,6 +292,11 @@ with tab2:
     if df_abc.empty:
         st.warning("No hay datos para esta selección.")
     else:
+        columna_valor = st.selectbox(
+            "Seleccionar métrica para Análisis ABC",
+            ["Margen Neto", "Subtotal Neto"]
+        )
+
         def calcular_abc(df_abc, valor_col='Subtotal Neto', grupo_col=col_producto):
             df_abc = df_abc.groupby(grupo_col)[valor_col].sum().reset_index()
             df_abc = df_abc.sort_values(by=valor_col, ascending=False)
@@ -303,19 +308,24 @@ with tab2:
             df_abc['tipo de producto'] = pd.cut(df_abc['PorcAcum'], bins=bins, labels=labels, include_lowest=True)
             return df_abc
 
-        df_abc_result = calcular_abc(df_abc)
-        st.dataframe(df_abc_result[[col_producto, 'Subtotal Neto', 'PorcAcum', 'tipo de producto']].sort_values(by='tipo de producto'))
+        df_abc_result = calcular_abc(df_abc, valor_col=columna_valor)
+
+        st.dataframe(
+            df_abc_result[[col_producto, columna_valor, 'PorcAcum', 'tipo de producto']].sort_values(by='tipo de producto'),
+            use_container_width=True
+        )
 
         graf_abc = alt.Chart(df_abc_result).mark_bar().encode(
             x=alt.X(col_producto, sort='-y'),
-            y=alt.Y('Subtotal Neto', title='Subtotal Neto CLP'),
+            y=alt.Y(columna_valor, title=f'{columna_valor} CLP'),
             color=alt.Color('tipo de producto', scale=alt.Scale(domain=['A', 'B', 'C'], range=['#1f77b4', '#ff7f0e', '#2ca02c'])),
             tooltip=[
                 alt.Tooltip(col_producto, title='Producto'),
-                alt.Tooltip('Subtotal Neto', format=",.0f"),
+                alt.Tooltip(columna_valor, format=",.0f"),
                 alt.Tooltip('tipo de producto')
             ]
         ).properties(height=400)
+
         st.altair_chart(graf_abc, use_container_width=True)
 
 with tab3:
