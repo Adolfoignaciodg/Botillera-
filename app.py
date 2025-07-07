@@ -179,6 +179,14 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 
 import io
 
+# Define variables de columna según tu Excel
+col_producto = "+Producto / Servicio"  # nombre exacto de la columna producto
+col_fecha = "+Fecha Documento"         # nombre exacto de la columna fecha
+col_tipo_producto = "+Tipo de Producto / Servicio"  # para filtrar categoría
+
+# Lista de medidas a sumar para resumen, por ejemplo:
+medidas = ['Cantidad', 'Subtotal Neto', 'Impuestos']  # ajusta según tus columnas
+
 with tab1:
     st.markdown("## 📌 Resumen General")
     resumen = {m: df_filtrado[m].sum() for m in medidas}
@@ -223,8 +231,13 @@ with tab1:
 
         # Reordenar columnas para que quede: Producto | Total | Fechas...
         columnas = pivot_diario_reset.columns.tolist()
-        columnas.remove('Total')
-        columnas.remove(col_producto)
+
+        # Solo eliminar si existen para evitar errores
+        if 'Total' in columnas:
+            columnas.remove('Total')
+        if col_producto in columnas:
+            columnas.remove(col_producto)
+
         columnas_finales = [col_producto, 'Total'] + columnas
         pivot_diario_reset = pivot_diario_reset[columnas_finales]
 
@@ -298,6 +311,7 @@ with tab1:
             ]
         ).properties(height=300)
         st.altair_chart(graf_diario, use_container_width=True)
+
 
 with tab2:
     st.markdown("## 🔍 Análisis ABC de Productos")
