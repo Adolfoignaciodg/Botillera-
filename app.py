@@ -241,20 +241,20 @@ with tab2:
             df_abc['PorcAcum'] = df_abc['Acumulado'] / total
             bins = [0, 0.7, 0.9, 1]
             labels = ['A', 'B', 'C']
-            df_abc['Tipo de Producto'] = pd.cut(df_abc['PorcAcum'], bins=bins, labels=labels, include_lowest=True)
+            df_abc['tipo de producto'] = pd.cut(df_abc['PorcAcum'], bins=bins, labels=labels, include_lowest=True)
             return df_abc
 
         df_abc_result = calcular_abc(df_abc)
-        st.dataframe(df_abc_result[[col_producto, 'Subtotal Neto', 'PorcAcum', 'Tipo de Producto']].sort_values(by='Tipo de Producto'))
+        st.dataframe(df_abc_result[[col_producto, 'Subtotal Neto', 'PorcAcum', 'tipo de producto']].sort_values(by='tipo de producto'))
 
         graf_abc = alt.Chart(df_abc_result).mark_bar().encode(
             x=alt.X(col_producto, sort='-y'),
             y=alt.Y('Subtotal Neto', title='Subtotal Neto CLP'),
-            color=alt.Color('Tipo de Producto', scale=alt.Scale(domain=['A', 'B', 'C'], range=['#1f77b4', '#ff7f0e', '#2ca02c'])),
+            color=alt.Color('tipo de producto', scale=alt.Scale(domain=['A', 'B', 'C'], range=['#1f77b4', '#ff7f0e', '#2ca02c'])),
             tooltip=[
                 alt.Tooltip(col_producto, title='Producto'),
                 alt.Tooltip('Subtotal Neto', format=",.0f"),
-                alt.Tooltip('Tipo de Producto')
+                alt.Tooltip('tipo de producto')
             ]
         ).properties(height=400)
         st.altair_chart(graf_abc, use_container_width=True)
@@ -406,7 +406,7 @@ with tab5:
         # Buscar columna Categoría (sensible a mayúsculas/minúsculas)
         col_categoria_stock = None
         for c in df_stock.columns:
-            if "Tipo de Producto" in c.lower():
+            if "tipo de producto" in c.lower():
                 col_categoria_stock = c
                 break
 
