@@ -311,6 +311,9 @@ with tab2:
             labels = ['A', 'B', 'C']
             df_grouped['tipo de producto'] = pd.cut(df_grouped['PorcAcum'], bins=bins, labels=labels, include_lowest=True)
 
+            # Convertir PorcAcum a porcentaje legible
+            df_grouped['PorcAcum'] = (df_grouped['PorcAcum'] * 100).round(2).astype(str) + '%'
+
             # Si es Margen Neto, calculamos margen por unidad
             if valor_col == "Margen Neto":
                 df_grouped['Margen por Unidad'] = df_grouped.apply(
@@ -345,6 +348,7 @@ with tab2:
         ).properties(height=400)
 
         st.altair_chart(graf_abc, use_container_width=True)
+
 
 
 with tab3:
