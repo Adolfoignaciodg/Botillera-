@@ -235,7 +235,10 @@ with tab1:
 
         # Función para resaltar fila TOTAL GENERAL
         def highlight_totales(row):
-            return ['background-color: #d9ead3; font-weight: bold' if row.name == len(pivot_diario_reset)-1 else '' for _ in row]
+            if row.name == len(pivot_diario_reset) - 1:
+                return ['background-color: #d9ead3; font-weight: bold'] * len(row)
+            else:
+                return [''] * len(row)
 
         st.dataframe(
             pivot_diario_reset.style.apply(highlight_totales, axis=1),
@@ -295,7 +298,6 @@ with tab1:
             ]
         ).properties(height=300)
         st.altair_chart(graf_diario, use_container_width=True)
-
 
 with tab2:
     st.markdown("## 🔍 Análisis ABC de Productos")
