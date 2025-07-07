@@ -311,14 +311,18 @@ with tab2:
             labels = ['A', 'B', 'C']
             df_grouped['tipo de producto'] = pd.cut(df_grouped['PorcAcum'], bins=bins, labels=labels, include_lowest=True)
 
-            # Convertir PorcAcum a porcentaje legible
-            df_grouped['PorcAcum'] = (df_grouped['PorcAcum'] * 100).round(2).astype(str) + '%'
-
             # Si es Margen Neto, calculamos margen por unidad
             if valor_col == "Margen Neto":
                 df_grouped['Margen por Unidad'] = df_grouped.apply(
                     lambda x: x[valor_col] / x['Cantidad'] if x['Cantidad'] > 0 else 0, axis=1
                 )
+
+            # Convertir columnas a formato CLP con separador de miles
+            df_grouped[columna_valor] = df_grouped[columna_valor].apply(lambda x: f"${x:,.0f}".replace(",", "."))
+            df_grouped['Cantidad'] = df_grouped['Cantidad'].apply(lambda x: f"{x:,.0f}".replace(",", "."))
+            df_grouped['PorcAcum'] = (df_grouped['PorcAcum'] * 100).round(2).astype(str) + '%'
+            if 'Margen por Unidad' in df_grouped.columns:
+                df_grouped['Margen por Unidad'] = df_grouped['Margen por Unidad'].apply(lambda x: f"${x:,.0f}".replace(",", "."))
 
             return df_grouped
 
@@ -341,13 +345,14 @@ with tab2:
             color=alt.Color('tipo de producto', scale=alt.Scale(domain=['A', 'B', 'C'], range=['#1f77b4', '#ff7f0e', '#2ca02c'])),
             tooltip=[
                 alt.Tooltip(col_producto, title='Producto'),
-                alt.Tooltip(columna_valor, format=",.0f", title=columna_valor),
+                alt.Tooltip(columna_valor, title=columna_valor),
                 alt.Tooltip('Cantidad', title='Unidades Vendidas'),
                 alt.Tooltip('tipo de producto', title='Clasificación ABC')
             ]
         ).properties(height=400)
 
         st.altair_chart(graf_abc, use_container_width=True)
+
 
 
 
