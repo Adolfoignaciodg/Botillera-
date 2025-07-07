@@ -265,23 +265,16 @@ with tab3:
     años_disponibles = sorted(df['Año'].dropna().unique())
     año_seleccionado = st.selectbox("Seleccionar Año", años_disponibles)
 
-    # Crear lista de opciones con formato "MM - MesNombre"
     meses_disponibles = df[df['Año'] == año_seleccionado][['MesNum', 'MesNombre']].drop_duplicates().sort_values('MesNum')
-    opciones_meses = meses_disponibles.apply(lambda x: f"{x['MesNum']:02d} - {x['MesNombre']}", axis=1).tolist()
-    mes_seleccionado = st.selectbox("Seleccionar Mes", opciones_meses)
+    mes_seleccionado = st.selectbox("Seleccionar Mes", meses_disponibles['MesNombre'].tolist())
 
-    # Extraer número de mes seleccionado (los primeros 2 caracteres)
-    mes_num = int(mes_seleccionado.split(" - ")[0])
-
-    
-    # Extraer número de mes seleccionado (los primeros 2 caracteres)
-    dias_disponibles = df[(df['Año'] == año_seleccionado) & (df['MesNum'] == mes_num)]['Día'].dropna().unique()
+    dias_disponibles = df[(df['Año'] == año_seleccionado) & (df['MesNombre'] == mes_seleccionado)]['Día'].dropna().unique()
     dias_disponibles = sorted(dias_disponibles)
     dia_seleccionado = st.selectbox("Seleccionar Día", dias_disponibles)
 
     df_detalle_fecha = df[
         (df['Año'] == año_seleccionado) &
-        (df['MesNum'] == mes_num) &
+        (df['MesNombre'] == mes_seleccionado) &
         (df['Día'] == dia_seleccionado)
     ]
 
@@ -480,5 +473,3 @@ with tab5:
                     st.dataframe(resumen_stock, use_container_width=True)
             else:
                 st.warning("No se encontraron columnas esperadas en archivo de stock para mostrar.")
-
-
