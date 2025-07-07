@@ -184,8 +184,6 @@ col_producto = "+Producto / Servicio"  # nombre exacto de la columna producto
 col_fecha = "+Fecha Documento"         # nombre exacto de la columna fecha
 col_tipo_producto = "+Tipo de Producto / Servicio"  # para filtrar categoría
 
-# Lista de medidas a sumar para resumen, por ejemplo:
-medidas = ['Cantidad', 'Subtotal Neto', 'Impuestos']  # ajusta según tus columnas
 
 import io
 
