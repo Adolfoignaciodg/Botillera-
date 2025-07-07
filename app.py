@@ -464,7 +464,7 @@ with tab5:
 
                 # KPIs resumen por categoría
                 resumen_stock = df_stock_filtrado.groupby(col_categoria_stock).agg({
-                    c: 'sum' for c in columnas_mostrar if c.lower() in ['stock actual', 'por despachar', 'disponible', 'por recibir']
+                    c: 'sum' for c in columnas_mostrar if c.lower() in ['stock', 'cantidad por despachar', 'cantidad disponible', 'por recibir']
                 }).reset_index()
 
                 if not resumen_stock.empty:
