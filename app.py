@@ -298,35 +298,54 @@ with tab2:
         )
 
         def calcular_abc(df_abc, valor_col='Subtotal Neto', grupo_col=col_producto):
-            df_abc = df_abc.groupby(grupo_col)[valor_col].sum().reset_index()
-            df_abc = df_abc.sort_values(by=valor_col, ascending=False)
-            df_abc['Acumulado'] = df_abc[valor_col].cumsum()
-            total = df_abc[valor_col].sum()
-            df_abc['PorcAcum'] = df_abc['Acumulado'] / total
+            df_grouped = df_abc.groupby(grupo_col).agg({
+                valor_col: 'sum',
+                'Cantidad': 'sum'
+            }).reset_index()
+
+            df_grouped = df_grouped.sort_values(by=valor_col, ascending=False)
+            df_grouped['Acumulado'] = df_grouped[valor_col].cumsum()
+            total = df_grouped[valor_col].sum()
+            df_grouped['PorcAcum'] = df_grouped['Acumulado'] / total
             bins = [0, 0.7, 0.9, 1]
             labels = ['A', 'B', 'C']
-            df_abc['tipo de producto'] = pd.cut(df_abc['PorcAcum'], bins=bins, labels=labels, include_lowest=True)
-            return df_abc
+            df_grouped['tipo de producto'] = pd.cut(df_grouped['PorcAcum'], bins=bins, labels=labels, include_lowest=True)
+
+            # Si es Margen Neto, calculamos margen por unidad
+            if valor_col == "Margen Neto":
+                df_grouped['Margen por Unidad'] = df_grouped.apply(
+                    lambda x: x[valor_col] / x['Cantidad'] if x['Cantidad'] > 0 else 0, axis=1
+                )
+
+            return df_grouped
 
         df_abc_result = calcular_abc(df_abc, valor_col=columna_valor)
 
+        # Mostrar tabla
+        columnas_mostrar = [col_producto, columna_valor, 'Cantidad', 'PorcAcum', 'tipo de producto']
+        if 'Margen por Unidad' in df_abc_result.columns:
+            columnas_mostrar.append('Margen por Unidad')
+
         st.dataframe(
-            df_abc_result[[col_producto, columna_valor, 'PorcAcum', 'tipo de producto']].sort_values(by='tipo de producto'),
+            df_abc_result[columnas_mostrar].sort_values(by='tipo de producto'),
             use_container_width=True
         )
 
+        # Gráfico ABC con unidades en tooltip
         graf_abc = alt.Chart(df_abc_result).mark_bar().encode(
             x=alt.X(col_producto, sort='-y'),
             y=alt.Y(columna_valor, title=f'{columna_valor} CLP'),
             color=alt.Color('tipo de producto', scale=alt.Scale(domain=['A', 'B', 'C'], range=['#1f77b4', '#ff7f0e', '#2ca02c'])),
             tooltip=[
                 alt.Tooltip(col_producto, title='Producto'),
-                alt.Tooltip(columna_valor, format=",.0f"),
-                alt.Tooltip('tipo de producto')
+                alt.Tooltip(columna_valor, format=",.0f", title=columna_valor),
+                alt.Tooltip('Cantidad', title='Unidades Vendidas'),
+                alt.Tooltip('tipo de producto', title='Clasificación ABC')
             ]
         ).properties(height=400)
 
         st.altair_chart(graf_abc, use_container_width=True)
+
 
 with tab3:
     st.markdown("## 📋 Detalle de Ventas por Día y Categoría")
