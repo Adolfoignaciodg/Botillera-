@@ -463,11 +463,12 @@ with tab5:
                     st.dataframe(df_stock_filtrado[columnas_mostrar], use_container_width=True)
 
                 # KPIs resumen por categoría
-                resumen_stock = df_stock_filtrado.groupby(col_categoria_stock).agg({
-                    c: 'sum' for c in columnas_mostrar if c.lower() in ['stock', 'cantidad por despachar', 'cantidad disponible', 'por recibir']
-                }).reset_index()
+                palabras_clave = ['stock','despachar´,'disponible','recibir´]
+                    columnas_resumen = [c for c in columnas_mostrar if any(p in c.lower() for p in palabras_clave)]
+                
 
-                if not resumen_stock.empty:
+                if  Columnas_resumen:
+                    resumen_stock = df_stock_filtrado.groupby(col_categoria_stock).agg({c: 'sum' for c in columnas_resumen}).reset_index()
                     st.markdown("### Resumen por Categoría")
                     st.dataframe(resumen_stock, use_container_width=True)
             else:
