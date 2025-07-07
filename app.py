@@ -205,36 +205,40 @@ with tab1:
         detalle_diario = df_filtrado.groupby([col_producto, col_fecha])['Cantidad'].sum().reset_index()
         pivot_diario = detalle_diario.pivot(index=col_producto, columns=col_fecha, values='Cantidad').fillna(0)
         pivot_diario = pivot_diario.sort_index(axis=1)
+
+        # Formatear columnas fechas a dd/mm/yyyy
         fechas_formateadas = pivot_diario.columns.strftime('%d/%m/%Y')
         pivot_diario.columns = fechas_formateadas
 
-        # Agregar totales por fila y columna
+        # Agregar columna Total (suma por fila)
         pivot_diario['Total'] = pivot_diario.sum(axis=1)
-        total_col = pivot_diario.sum(axis=0)
-        total_col.name = 'Total'
-        pivot_diario = pd.concat([pivot_diario, pd.DataFrame([total_col])])
-        pivot_diario = pivot_diario.astype(int)
 
-        # Mostrar tabla separando totales para evitar errores de .style
-        pivot_diario_reset = pivot_diario.reset_index()
-        ultima_fila = pivot_diario_reset.iloc[[-1]]
-        otras_filas = pivot_diario_reset.iloc[:-1]
+        # Resetear índice para tener la columna producto como columna normal
+        pivot_diario = pivot_diario.reset_index()
 
-        st.dataframe(otras_filas, use_container_width=True)
+        # Reordenar columnas para que quede: Producto | Total | Fechas...
+        columnas_finales = [col_producto, 'Total'] + [c for c in pivot_diario.columns if c not in [col_producto, 'Total']]
+        pivot_diario = pivot_diario[columnas_finales]
+
+        # Convertir valores (excepto producto) a int
+        for c in columnas_finales:
+            if c != col_producto:
+                pivot_diario[c] = pivot_diario[c].astype(int)
+
+        # Mostrar tabla con totales por producto al lado del nombre
+        st.dataframe(pivot_diario, use_container_width=True)
+
+        # Totales generales (sumar columnas, excepto producto)
+        total_general = pivot_diario.drop(columns=[col_producto]).sum().to_frame().T
+        total_general[col_producto] = "TOTAL GENERAL"
+        # Reordenar columnas igual que tabla
+        total_general = total_general[[col_producto] + [c for c in total_general.columns if c != col_producto]]
+
         st.markdown("### 🔢 Totales Generales")
-        try:
-            st.dataframe(
-                ultima_fila.style.set_properties(**{
-                    'background-color': '#d9ead3',
-                    'font-weight': 'bold'
-                }),
-                use_container_width=True
-            )
-        except:
-            st.dataframe(ultima_fila, use_container_width=True)
+        st.dataframe(total_general, use_container_width=True)
 
-        # Botón para descargar en Excel
-        to_download = pivot_diario_reset.copy()
+        # Botón para descargar en Excel (tabla + totales juntos)
+        to_download = pd.concat([pivot_diario, total_general], ignore_index=True)
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             to_download.to_excel(writer, index=False, sheet_name='Detalle Diario')
@@ -248,7 +252,7 @@ with tab1:
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
 
-        # Mostrar productos sin ventas
+        # Mostrar productos sin ventas en categoría si aplica
         if seleccion_tipo_producto != "Todos" and seleccion_tipo_producto is not None:
             productos_en_categoria = df[df[col_tipo_producto] == seleccion_tipo_producto][col_producto].drop_duplicates()
             productos_vendidos = df_filtrado[col_producto].drop_duplicates()
@@ -260,6 +264,7 @@ with tab1:
             else:
                 st.info("Todos los productos de esta categoría han sido vendidos en el periodo seleccionado.")
 
+        # Gráfico por producto seleccionado para detalle diario
         prod_para_graf = st.selectbox("Seleccionar Producto para gráfico diario", ["Todos"] + sorted(detalle_diario[col_producto].unique()))
         if prod_para_graf != "Todos":
             df_graf = detalle_diario[detalle_diario[col_producto] == prod_para_graf]
@@ -286,7 +291,6 @@ with tab1:
             ]
         ).properties(height=300)
         st.altair_chart(graf_diario, use_container_width=True)
-
 
 with tab2:
     st.markdown("## 🔍 Análisis ABC de Productos")
