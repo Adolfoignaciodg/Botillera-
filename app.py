@@ -177,6 +177,8 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📦 Cuadratura de Stock"
 ])
 
+import io
+
 with tab1:
     st.markdown("## 📌 Resumen General")
     resumen = {m: df_filtrado[m].sum() for m in medidas}
@@ -213,24 +215,38 @@ with tab1:
         pivot_diario = pd.concat([pivot_diario, pd.DataFrame([total_col])])
         pivot_diario = pivot_diario.astype(int)
 
-        # Estilos para resaltar totales
-        def resaltar_totales(val):
-            if val.name == 'Total':
-                return ['background-color: #d9ead3'] * len(val)
-            return [''] * len(val)
+        # Mostrar tabla separando totales para evitar errores de .style
+        pivot_diario_reset = pivot_diario.reset_index()
+        ultima_fila = pivot_diario_reset.iloc[[-1]]
+        otras_filas = pivot_diario_reset.iloc[:-1]
 
-        def resaltar_columna_totales(df):
-            styles = pd.DataFrame('', index=df.index, columns=df.columns)
-            if 'Total' in df.columns:
-                styles['Total'] = 'background-color: #d9ead3'
-            return styles
-
+        st.dataframe(otras_filas, use_container_width=True)
+        st.markdown("### 🔢 Totales Generales")
         try:
-            styled_table = pivot_diario.style.apply(resaltar_totales, axis=1).apply(resaltar_columna_totales, axis=None)
-            st.dataframe(styled_table, use_container_width=True)
-        except Exception:
-            st.warning("No se pudieron aplicar estilos en esta tabla. Mostrando sin formato.")
-            st.dataframe(pivot_diario, use_container_width=True)
+            st.dataframe(
+                ultima_fila.style.set_properties(**{
+                    'background-color': '#d9ead3',
+                    'font-weight': 'bold'
+                }),
+                use_container_width=True
+            )
+        except:
+            st.dataframe(ultima_fila, use_container_width=True)
+
+        # Botón para descargar en Excel
+        to_download = pivot_diario_reset.copy()
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            to_download.to_excel(writer, index=False, sheet_name='Detalle Diario')
+            writer.save()
+        data_excel = output.getvalue()
+
+        st.download_button(
+            label="📥 Descargar detalle diario con totales en Excel",
+            data=data_excel,
+            file_name='detalle_diario_ventas.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
 
         # Mostrar productos sin ventas
         if seleccion_tipo_producto != "Todos" and seleccion_tipo_producto is not None:
@@ -270,6 +286,7 @@ with tab1:
             ]
         ).properties(height=300)
         st.altair_chart(graf_diario, use_container_width=True)
+
 
 with tab2:
     st.markdown("## 🔍 Análisis ABC de Productos")
