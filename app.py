@@ -187,7 +187,7 @@ with tab1:
         cols_metrics[idx].metric(m, display_val)
 
     st.markdown(f"## 🛒 Cantidades Vendidas por Producto en categoría '{seleccion_tipo_producto or 'Todos'}' " +
-                (f"y Mes '{seleccion_mes}'" if seleccion_mes != "Todos" else "(todo el tiempo)"))
+                (f"y Mes '{seleccion_mes}'" if seleccion_mes != 'Todos' else "(todo el tiempo)"))
 
     df_cantidades = df_filtrado.copy()
     if seleccion_producto != "Todos":
@@ -203,13 +203,28 @@ with tab1:
         detalle_diario = df_filtrado.groupby([col_producto, col_fecha])['Cantidad'].sum().reset_index()
         pivot_diario = detalle_diario.pivot(index=col_producto, columns=col_fecha, values='Cantidad').fillna(0)
         pivot_diario.columns = pivot_diario.columns.strftime('%d/%m/%Y')
+
+        # Agregar totales por fila y columna
         pivot_diario['Total'] = pivot_diario.sum(axis=1)
         total_col = pivot_diario.sum(axis=0)
         total_col.name = 'Total'
         pivot_diario = pd.concat([pivot_diario, pd.DataFrame([total_col])])
         pivot_diario = pivot_diario.astype(int)
-        st.dataframe(pivot_diario, use_container_width=True)
-       
+
+        # Estilos para resaltar totales
+        def resaltar_totales(val):
+            if val.name == 'Total':
+                return ['background-color: #d9ead3'] * len(val)
+            return [''] * len(val)
+
+        def resaltar_columna_totales(df):
+            styles = pd.DataFrame('', index=df.index, columns=df.columns)
+            if 'Total' in df.columns:
+                styles['Total'] = 'background-color: #d9ead3'
+            return styles
+
+        styled_table = pivot_diario.style.apply(resaltar_totales, axis=1).apply(resaltar_columna_totales, axis=None)
+        st.dataframe(styled_table, use_container_width=True)
 
         prod_para_graf = st.selectbox("Seleccionar Producto para gráfico diario", ["Todos"] + sorted(detalle_diario[col_producto].unique()))
         if prod_para_graf != "Todos":
@@ -217,9 +232,13 @@ with tab1:
             graf_diario = alt.Chart(df_graf).mark_line(point=True).encode(
                 x=alt.X(col_fecha, title="Fecha", axis=alt.Axis(format='%d/%m/%Y')),
                 y=alt.Y('Cantidad', title="Cantidad Vendida"),
-                tooltip=[alt.Tooltip(col_fecha, title="Fecha", format='%d/%m/%Y'), alt.Tooltip('Cantidad')]
+                tooltip=[
+                    alt.Tooltip(col_fecha, title="Fecha", format='%d/%m/%Y'),
+                    alt.Tooltip('Cantidad')
+                ]
             ).properties(height=300)
             st.altair_chart(graf_diario, use_container_width=True)
+
     else:
         detalle_diario = df_filtrado.groupby(col_fecha)['Cantidad'].sum().reset_index().sort_values(col_fecha)
         st.dataframe(detalle_diario, use_container_width=True)
@@ -227,7 +246,10 @@ with tab1:
         graf_diario = alt.Chart(detalle_diario).mark_line(point=True).encode(
             x=alt.X(col_fecha, title="Fecha", axis=alt.Axis(format='%d/%m/%Y')),
             y=alt.Y('Cantidad', title="Cantidad Vendida"),
-            tooltip=[alt.Tooltip(col_fecha, title="Fecha", format='%d/%m/%Y'), alt.Tooltip('Cantidad')]
+            tooltip=[
+                alt.Tooltip(col_fecha, title="Fecha", format='%d/%m/%Y'),
+                alt.Tooltip('Cantidad')
+            ]
         ).properties(height=300)
         st.altair_chart(graf_diario, use_container_width=True)
 
