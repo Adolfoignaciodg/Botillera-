@@ -217,33 +217,50 @@ with tab1:
         detalle_diario = df_filtrado.groupby([col_producto, col_fecha])['Cantidad'].sum().reset_index()
         pivot_diario = detalle_diario.pivot(index=col_producto, columns=col_fecha, values='Cantidad').fillna(0)
         pivot_diario = pivot_diario.sort_index(axis=1)
-        fechas_formateadas = pivot_diario.columns.strftime('%d/%m/%Y')
-        pivot_diario.columns = fechas_formateadas
 
-        # Agregar totales por fila y columna
+        # Total por producto (fila), lo vamos a poner después del nombre producto
         pivot_diario['Total'] = pivot_diario.sum(axis=1)
+
+        # Total por columna (fechas + total)
         total_col = pivot_diario.sum(axis=0)
-        total_col.name = 'Total'
-        pivot_diario = pd.concat([pivot_diario, pd.DataFrame([total_col])])
-        pivot_diario = pivot_diario.astype(int)
+        total_col.name = 'TOTAL'
 
-        # Mostrar tabla separando totales para evitar errores de .style
+        # Construir DataFrame total_row con el mismo orden de columnas que pivot_diario
+        total_row = pd.DataFrame([total_col.values], columns=pivot_diario.columns, index=['TOTAL'])
+
+        # Unir todo en un solo DataFrame
+        pivot_diario = pd.concat([pivot_diario, total_row])
+
+        # Ahora reordenamos las columnas para que quede:
+        # Producto | Total | fechas ...
+        # El índice es producto, lo convertimos en columna para manipular mejor
         pivot_diario_reset = pivot_diario.reset_index()
-        ultima_fila = pivot_diario_reset.iloc[[-1]]
-        otras_filas = pivot_diario_reset.iloc[:-1]
 
-        st.dataframe(otras_filas, use_container_width=True)
-        st.markdown("### 🔢 Totales Generales")
-        try:
-            st.dataframe(
-                ultima_fila.style.set_properties(**{
-                    'background-color': '#d9ead3',
-                    'font-weight': 'bold'
-                }),
-                use_container_width=True
-            )
-        except:
-            st.dataframe(ultima_fila, use_container_width=True)
+        # Obtener lista de fechas (todas menos producto y total)
+        cols_fechas = [col for col in pivot_diario_reset.columns if col not in ['index', 'Total']]
+
+        # Reordenar columnas: 'index' (producto), 'Total', fechas...
+        pivot_diario_reset = pivot_diario_reset[['index', 'Total'] + cols_fechas]
+
+        # Renombrar 'index' a nombre del producto
+        pivot_diario_reset = pivot_diario_reset.rename(columns={'index': col_producto})
+
+        # Convertir a int todas las columnas excepto la de producto
+        for c in pivot_diario_reset.columns:
+            if c != col_producto:
+                pivot_diario_reset[c] = pivot_diario_reset[c].astype(int)
+
+        # Función para resaltar la última fila (totales)
+        def resaltar_totales(fila):
+            if fila[col_producto] == 'TOTAL':
+                return ['background-color: #d9ead3; font-weight: bold'] * len(fila)
+            else:
+                return [''] * len(fila)
+
+        st.dataframe(
+            pivot_diario_reset.style.apply(resaltar_totales, axis=1),
+            use_container_width=True
+        )
 
         # Mostrar productos sin ventas
         if seleccion_tipo_producto != "Todos" and seleccion_tipo_producto is not None:
