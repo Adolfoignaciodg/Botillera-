@@ -197,7 +197,7 @@ with tab1:
         cols_metrics[idx].metric(m, display_val)
 
     st.markdown(f"## 🛒 Cantidades Vendidas por Producto en categoría '{seleccion_tipo_producto or 'Todos'}' " +
-                (f"y Mes '{seleccion_mes}'" if seleccion_mes != 'Todos' else "(todo el tiempo)"))
+                (f"y Mes '{seleccion_mes}'" if seleccion_mes != "Todos" else "(todo el tiempo)"))
 
     df_cantidades = df_filtrado.copy()
     if seleccion_producto != "Todos":
@@ -214,55 +214,54 @@ with tab1:
         pivot_diario = detalle_diario.pivot(index=col_producto, columns=col_fecha, values='Cantidad').fillna(0)
         pivot_diario = pivot_diario.sort_index(axis=1)
 
-        # Formatear columnas fechas a dd/mm/yyyy
+        # Formatear fechas
         fechas_formateadas = pivot_diario.columns.strftime('%d/%m/%Y')
         pivot_diario.columns = fechas_formateadas
 
-        # Agregar columna Total (suma por fila)
         pivot_diario['Total'] = pivot_diario.sum(axis=1)
-
-        # Agregar fila Total General (suma por columnas)
         total_col = pivot_diario.sum(axis=0)
         total_col.name = 'TOTAL GENERAL'
         pivot_diario = pd.concat([pivot_diario, pd.DataFrame([total_col])])
 
-        # Resetear índice para tener la columna producto como columna normal
         pivot_diario_reset = pivot_diario.reset_index()
 
-        # Reordenar columnas para que quede: Producto | Total | Fechas...
+        # Reordenar columnas si existen
         columnas = pivot_diario_reset.columns.tolist()
+        columnas_finales = []
 
-        # Solo eliminar si existen para evitar errores
-        if 'Total' in columnas:
-            columnas.remove('Total')
         if col_producto in columnas:
-            columnas.remove(col_producto)
+            columnas_finales.append(col_producto)
+        if 'Total' in columnas:
+            columnas_finales.append('Total')
 
-        columnas_finales = [col_producto, 'Total'] + columnas
+        otras_columnas = [col for col in columnas if col not in columnas_finales]
+        columnas_finales += otras_columnas
+
         pivot_diario_reset = pivot_diario_reset[columnas_finales]
 
-        # Convertir valores numéricos a int donde corresponda (excepto producto)
+        # Convertir columnas a int donde se pueda
         for c in columnas_finales:
             if c != col_producto:
-                pivot_diario_reset[c] = pivot_diario_reset[c].astype(int)
+                try:
+                    pivot_diario_reset[c] = pivot_diario_reset[c].astype(int)
+                except:
+                    pass  # en caso de columnas no numéricas como fechas mal parseadas
 
-        # Función para resaltar fila TOTAL GENERAL
+        # Fila resaltada
         def highlight_totales(row):
             if row.name == len(pivot_diario_reset) - 1:
                 return ['background-color: #d9ead3; font-weight: bold'] * len(row)
-            else:
-                return [''] * len(row)
+            return [''] * len(row)
 
         st.dataframe(
             pivot_diario_reset.style.apply(highlight_totales, axis=1),
             use_container_width=True
         )
 
-        # Botón para descargar en Excel (tabla con totales incluidos)
+        # Descargar Excel
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             pivot_diario_reset.to_excel(writer, index=False, sheet_name='Detalle Diario')
-            writer.save()
         data_excel = output.getvalue()
 
         st.download_button(
@@ -272,7 +271,7 @@ with tab1:
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
 
-        # Mostrar productos sin ventas en categoría si aplica
+        # Productos sin ventas
         if seleccion_tipo_producto != "Todos" and seleccion_tipo_producto is not None:
             productos_en_categoria = df[df[col_tipo_producto] == seleccion_tipo_producto][col_producto].drop_duplicates()
             productos_vendidos = df_filtrado[col_producto].drop_duplicates()
@@ -284,7 +283,7 @@ with tab1:
             else:
                 st.info("Todos los productos de esta categoría han sido vendidos en el periodo seleccionado.")
 
-        # Gráfico por producto seleccionado para detalle diario
+        # Gráfico por producto
         prod_para_graf = st.selectbox("Seleccionar Producto para gráfico diario", ["Todos"] + sorted(detalle_diario[col_producto].unique()))
         if prod_para_graf != "Todos":
             df_graf = detalle_diario[detalle_diario[col_producto] == prod_para_graf]
@@ -311,6 +310,7 @@ with tab1:
             ]
         ).properties(height=300)
         st.altair_chart(graf_diario, use_container_width=True)
+
 
 
 with tab2:
