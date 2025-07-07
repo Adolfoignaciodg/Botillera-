@@ -101,7 +101,7 @@ for col in medidas:
     df[col] = pd.to_numeric(df[col], errors="coerce")
 
 # Convertir columna fecha a datetime
-df[col_fecha] = pd.to_datetime(df[col_fecha], errors='coerce')
+df[col_fecha] = pd.to_datetime(df[col_fecha], errors='coerce', dayfirst=True)
 
 # Extraer Año, Mes (numérico y nombre) y Día para filtros en nueva pestaña
 df['Año'] = df[col_fecha].dt.year
@@ -202,7 +202,10 @@ with tab1:
     if seleccion_producto == "Todos":
         detalle_diario = df_filtrado.groupby([col_producto, col_fecha])['Cantidad'].sum().reset_index()
         pivot_diario = detalle_diario.pivot(index=col_producto, columns=col_fecha, values='Cantidad').fillna(0)
-        pivot_diario.columns = pivot_diario.columns.strftime('%d/%m/%Y')
+        pivot_diario = pivot_diario.sort_index(axis=1)
+        fechas_formateadas = pivot_diario.columns.strftime('%d/%m/%Y')
+        pivot_diario.columns = fechas_formateadas
+        
 
         # Agregar totales por fila y columna
         pivot_diario['Total'] = pivot_diario.sum(axis=1)
