@@ -492,7 +492,7 @@ with tab5:
             'ENERGETICAS E ISOTONICAS', 'ESPUMANTES'
         ]
 
-        # Buscar columna categoría en stock
+        # Buscar columna de categoría
         col_categoria_stock = next((c for c in df_stock.columns if "tipo de producto" in c.lower()), None)
 
         if not col_categoria_stock:
@@ -507,12 +507,12 @@ with tab5:
                 df_stock_filtrado = df_stock_filtrado[df_stock_filtrado[col_categoria_stock] == seleccion_cat_stock]
 
             # --- Ventas acumuladas desde enero ---
-            inicio_anio = pd.Timestamp(datetime.now().year, 1, 1)
+            inicio_anio = pd.Timestamp.now().replace(month=1, day=1)
             ventas_desde_enero = df[df[col_fecha] >= inicio_anio]
             ventas_por_producto = ventas_desde_enero.groupby(col_producto)['Cantidad'].sum().reset_index()
             ventas_por_producto.columns = [col_producto, "Vendidas desde Ene"]
 
-            col_prod_stock = "Producto"  # asegúrate que coincide con el Excel
+            col_prod_stock = "Producto"  # Asegúrate que coincide con tu Excel
 
             df_stock_cuadrado = pd.merge(
                 df_stock_filtrado, ventas_por_producto,
@@ -520,7 +520,7 @@ with tab5:
             )
             df_stock_cuadrado["Vendidas desde Ene"] = df_stock_cuadrado["Vendidas desde Ene"].fillna(0)
 
-            # Agregar alerta por bajo stock o sin ventas
+            # Alerta por bajo stock o sin ventas
             df_stock_cuadrado["Alerta"] = df_stock_cuadrado.apply(lambda row: (
                 "❗ Sin ventas" if row["Vendidas desde Ene"] == 0 else
                 "⚠️ Bajo Stock" if row["Vendidas desde Ene"] >= 20 and row.get("Stock Actual", 0) < 5 else ""
@@ -533,36 +533,72 @@ with tab5:
                 "Precio Venta Bruto", "Margen Unitario"
             ]
             columnas_mostrar = [c for pc in posibles_cols for c in df_stock_cuadrado.columns if pc.lower() == c.lower()]
-
             columnas_mostrar += ["Vendidas desde Ene", "Alerta"]
 
-            # Estilo visual para stock
+            # Formateo visual chileno
+            def formato_visual(val, tipo="entero"):
+                try:
+                    val = float(val)
+                    if tipo == "moneda":
+                        return f"${val:,.0f}".replace(",", ".")
+                    elif tipo == "entero":
+                        return f"{int(val):,}".replace(",", ".")
+                    else:
+                        return val
+                except:
+                    return val
+
+            columnas_formato_entero = [c for c in columnas_mostrar if any(k in c.lower() for k in ["stock", "cantidad", "por recibir", "vendidas"])]
+            columnas_formato_moneda = [c for c in columnas_mostrar if any(k in c.lower() for k in ["precio", "costo", "margen"])]
+
+            df_mostrar = df_stock_cuadrado[columnas_mostrar].copy()
+
+            for col in columnas_formato_entero:
+                if col in df_mostrar.columns:
+                    df_mostrar[col] = df_mostrar[col].apply(lambda x: formato_visual(x, tipo="entero"))
+
+            for col in columnas_formato_moneda:
+                if col in df_mostrar.columns:
+                    df_mostrar[col] = df_mostrar[col].apply(lambda x: formato_visual(x, tipo="moneda"))
+
+            # Ordenar con alertas primero
+            df_mostrar["__orden_alerta__"] = df_stock_cuadrado["Alerta"].apply(lambda x: 0 if "❗" in x else 1 if "⚠️" in x else 2)
+            df_mostrar = df_mostrar.sort_values("__orden_alerta__").drop(columns="__orden_alerta__")
+
+            # Estilo para stock
             def destacar_stock(val):
                 try:
-                    if float(val) == 0:
+                    if float(val.replace(".", "").replace("$", "")) == 0:
                         return 'background-color: #ff4d4d; color: white; font-weight: bold'
-                    elif float(val) < 5:
+                    elif float(val.replace(".", "").replace("$", "")) < 5:
                         return 'background-color: #ffcc00; font-weight: bold'
                 except:
                     return ''
 
             st.markdown("### Tabla de stock + ventas desde enero")
-            styled_df = df_stock_cuadrado[columnas_mostrar].style.applymap(
+            styled_df = df_mostrar.style.applymap(
                 destacar_stock,
-                subset=[c for c in columnas_mostrar if "stock" in c.lower()]
+                subset=[c for c in columnas_formato_entero if "stock" in c.lower()]
             )
             st.dataframe(styled_df, use_container_width=True)
 
-            # KPIs resumen por categoría
+            # --- KPIs resumen por categoría ---
             palabras_clave = ['stock', 'cantidad por despachar', 'cantidad disponible', 'por recibir']
             columnas_resumen = [c for c in columnas_mostrar if any(p in c.lower() for p in palabras_clave)]
 
             if columnas_resumen:
                 resumen_stock = df_stock_cuadrado.groupby(col_categoria_stock).agg(
-                    {c: 'sum' for c in columnas_resumen}
+                    {c: 'sum' for c in columnas_resumen if c in df_stock_cuadrado.columns}
                 ).reset_index()
+
+                # Formato visual resumen
+                for col in resumen_stock.columns:
+                    if col != col_categoria_stock and col in columnas_formato_entero:
+                        resumen_stock[col] = resumen_stock[col].apply(lambda x: formato_visual(x, tipo="entero"))
+
                 st.markdown("### Resumen por Categoría")
                 st.dataframe(resumen_stock, use_container_width=True)
+
 
             else:
                 st.warning("No se encontraron columnas esperadas en archivo de stock para mostrar.")
