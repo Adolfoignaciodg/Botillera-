@@ -506,43 +506,46 @@ with tab5:
             if seleccion_cat_stock != "Todas":
                 df_stock_filtrado = df_stock_filtrado[df_stock_filtrado[col_categoria_stock] == seleccion_cat_stock]
 
-            # --- FILTRO MES DESDE (DÍNAMICO) ---
-            # Asumiendo que 'df' tiene una columna de fecha, la columna usada debe estar definida, 
-            # por ejemplo: col_fecha = "Fecha" (tú ya la tienes en tu código)
-            # Extraemos meses disponibles del dataframe para que el usuario pueda elegir
+            # Asegurarse que la columna fecha está en datetime
+            df[col_fecha] = pd.to_datetime(df[col_fecha], errors='coerce')
+
+            # Diccionario meses español
             meses_es = {
                 1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
                 5: "mayo", 6: "junio", 7: "julio", 8: "agosto",
                 9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre"
             }
 
-            # Extraemos meses disponibles en df
-            meses_en_df = sorted(df[col_fecha].dt.month.unique())
+            # Extraemos meses disponibles en df para mostrar al usuario
+            meses_en_df = sorted(df[col_fecha].dt.month.dropna().unique())
             meses_nombre = [meses_es[m].capitalize() for m in meses_en_df]
 
-            # Selectbox para mes "desde"
             seleccion_mes = st.selectbox("Ventas acumuladas desde mes:", ["Enero"] + meses_nombre)
 
-            # Convertir seleccion_mes a número de mes
-            inv_meses_es = {v.capitalize(): k for k, v in meses_es.items()}
-            mes_desde_num = inv_meses_es.get(seleccion_mes, 1)
+            # Mapear mes seleccionado a número, normalizando a minúsculas
+            inv_meses_es = {v.lower(): k for k, v in meses_es.items()}
+            mes_desde_num = inv_meses_es.get(seleccion_mes.lower(), 1)
 
-            # Mes máximo con datos
-            mes_max_num = df[col_fecha].dt.month.max()
+            mes_max_num = int(df[col_fecha].dt.month.max())
             mes_hasta_str = meses_es.get(mes_max_num, "mes desconocido")
 
-            # Filtrar ventas por rango meses
-            ventas_rango = df[
-                (df[col_fecha].dt.month >= mes_desde_num) &
-                (df[col_fecha].dt.month <= mes_max_num)
-            ]
+            from pandas.tseries.offsets import MonthBegin
+
+            anio_min = int(df[col_fecha].dt.year.min())
+            anio_max = int(df[col_fecha].dt.year.max())
+
+            fecha_inicio = pd.Timestamp(year=anio_min, month=mes_desde_num, day=1)
+            fecha_fin = (pd.Timestamp(year=anio_max, month=mes_max_num, day=1) + MonthBegin(1)) - pd.Timedelta(days=1)
+
+            # Filtrar datos por rango fecha completo (año + mes)
+            ventas_rango = df[(df[col_fecha] >= fecha_inicio) & (df[col_fecha] <= fecha_fin)]
 
             ventas_por_producto = ventas_rango.groupby(col_producto)['Cantidad'].sum().reset_index()
 
             titulo_col_ventas = f"Vendidas desde {meses_es[mes_desde_num]} hasta {mes_hasta_str}"
             ventas_por_producto.columns = [col_producto, titulo_col_ventas]
 
-            col_prod_stock = "Producto"  # Asegúrate que coincide con tu Excel
+            col_prod_stock = "Producto"  # Que coincida con tu Excel
 
             df_stock_cuadrado = pd.merge(
                 df_stock_filtrado, ventas_por_producto,
@@ -550,13 +553,11 @@ with tab5:
             )
             df_stock_cuadrado[titulo_col_ventas] = df_stock_cuadrado[titulo_col_ventas].fillna(0)
 
-            # Alerta por bajo stock o sin ventas
             df_stock_cuadrado["Alerta"] = df_stock_cuadrado.apply(lambda row: (
                 "❗ Sin ventas" if row[titulo_col_ventas] == 0 else
                 "⚠️ Bajo Stock" if row[titulo_col_ventas] >= 20 and row.get("Stock Actual", 0) < 5 else ""
             ), axis=1)
 
-            # Columnas visuales
             posibles_cols = [
                 "Producto", "Marca", "Stock Actual", "Cantidad por Despachar",
                 "Cantidad Disponible", "Por Recibir", "Costo Neto Prom. Unitario",
@@ -565,7 +566,6 @@ with tab5:
             columnas_mostrar = [c for pc in posibles_cols for c in df_stock_cuadrado.columns if pc.lower() == c.lower()]
             columnas_mostrar += [titulo_col_ventas, "Alerta"]
 
-            # Formateo visual chileno
             def formato_visual(val, tipo="entero"):
                 try:
                     val = float(val)
@@ -591,11 +591,9 @@ with tab5:
                 if col in df_mostrar.columns:
                     df_mostrar[col] = df_mostrar[col].apply(lambda x: formato_visual(x, tipo="moneda"))
 
-            # Ordenar con alertas primero
             df_mostrar["__orden_alerta__"] = df_stock_cuadrado["Alerta"].apply(lambda x: 0 if "❗" in x else 1 if "⚠️" in x else 2)
             df_mostrar = df_mostrar.sort_values("__orden_alerta__").drop(columns="__orden_alerta__")
 
-            # Estilo para stock
             def destacar_stock(val):
                 try:
                     if float(str(val).replace(".", "").replace("$", "")) == 0:
@@ -612,7 +610,6 @@ with tab5:
             )
             st.dataframe(styled_df, use_container_width=True)
 
-            # --- KPIs resumen por categoría ---
             palabras_clave = ['stock', 'cantidad por despachar', 'cantidad disponible', 'por recibir']
             columnas_resumen = [c for c in columnas_mostrar if any(p in c.lower() for p in palabras_clave)]
 
@@ -621,7 +618,6 @@ with tab5:
                     {c: 'sum' for c in columnas_resumen if c in df_stock_cuadrado.columns}
                 ).reset_index()
 
-                # Formato visual resumen
                 for col in resumen_stock.columns:
                     if col != col_categoria_stock and col in columnas_formato_entero:
                         resumen_stock[col] = resumen_stock[col].apply(lambda x: formato_visual(x, tipo="entero"))
