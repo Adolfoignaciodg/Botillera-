@@ -258,15 +258,27 @@ with tab1:
         except:
             st.dataframe(ultima_fila, use_container_width=True)
 
-        # Mostrar productos sin ventas
+        # Mostrar productos sin ventas (usando Producto Completo)
         if seleccion_tipo_producto != "Todos" and seleccion_tipo_producto is not None:
-            productos_en_categoria = df[df[col_tipo_producto] == seleccion_tipo_producto][col_producto].drop_duplicates()
+            # Filtrar productos base en la categoría
+            df_productos_categoria = df[df[col_tipo_producto] == seleccion_tipo_producto].copy()
+            if '+Variante' in df_productos_categoria.columns:
+                df_productos_categoria['Producto Completo'] = df_productos_categoria.apply(
+                    lambda row: row[col_producto] if pd.isna(row['+Variante']) or str(row['+Variante']).strip() == ""
+                    else f"{row[col_producto]} ({str(row['+Variante']).strip()})",
+                    axis=1
+                )
+            else:
+                df_productos_categoria['Producto Completo'] = df_productos_categoria[col_producto]
+            df_productos_categoria['Producto Completo'] = df_productos_categoria['Producto Completo'].str.upper().str.strip()
+
+            productos_en_categoria = df_productos_categoria['Producto Completo'].drop_duplicates()
             productos_vendidos = df_filtrado['Producto Completo'].drop_duplicates()
             productos_no_vendidos = productos_en_categoria[~productos_en_categoria.isin(productos_vendidos)]
 
             st.markdown(f"## 🚫 Productos SIN ventas en categoría '{seleccion_tipo_producto}'")
             if not productos_no_vendidos.empty:
-                st.dataframe(productos_no_vendidos.to_frame(name=col_producto), use_container_width=True)
+                st.dataframe(productos_no_vendidos.to_frame(name='Producto Completo'), use_container_width=True)
             else:
                 st.info("Todos los productos de esta categoría han sido vendidos en el periodo seleccionado.")
 
