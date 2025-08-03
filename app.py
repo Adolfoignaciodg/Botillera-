@@ -442,6 +442,14 @@ with tab3:
             if 'Subtotal Neto' in df_cat.columns:
                 df_cat['Subtotal Neto'] = df_cat['Subtotal Neto'].apply(lambda x: f"{int(x):,}".replace(",", "."))
 
+            # Estilos: centrar 'Cantidad', alinear a la derecha 'Subtotal Neto'
+            styler = df_cat[cols_mostrar].style.set_properties(
+                subset=['Cantidad'], **{'text-align': 'center'}
+            ).set_properties(
+                subset=['Subtotal Neto'], **{'text-align': 'right'}
+            )
+
+            st.dataframe(styler, use_container_width=True)
 
 
 with tab4:
