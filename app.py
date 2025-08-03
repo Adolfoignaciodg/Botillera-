@@ -380,6 +380,7 @@ with tab2:
 
         st.altair_chart(graf_abc, use_container_width=True)
 
+
 with tab3:
     st.markdown("## 📋 Detalle de Ventas por Día y Categoría")
 
@@ -433,7 +434,14 @@ with tab3:
             # Mostrar Producto Completo en vez del solo nombre de producto para mejor claridad
             cols_mostrar = ['Producto Completo', 'Cantidad', 'Subtotal Neto']
             cols_mostrar = [c for c in cols_mostrar if c in df_cat.columns]
+
+            # Formatear columna Subtotal Neto con separador de miles y sin decimales
+            if 'Subtotal Neto' in df_cat.columns:
+                df_cat = df_cat.copy()
+                df_cat['Subtotal Neto'] = df_cat['Subtotal Neto'].apply(lambda x: f"{int(x):,}".replace(",", "."))
+
             st.dataframe(df_cat[cols_mostrar], use_container_width=True)
+
 
 
 
