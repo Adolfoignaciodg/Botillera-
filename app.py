@@ -632,8 +632,7 @@ with tab5:
 
         df_stock_cuadrado[titulo_col_ventas] = df_stock_cuadrado[titulo_col_ventas].fillna(0)
 
-        # ---- Aquí agrego limpieza para Stock y Costo antes de multiplicar ----
-
+        # --- LIMPieza y conversión antes de calcular valor en stock ---
         def limpiar_a_numero_positivo(valor):
             if pd.isna(valor):
                 return 0
@@ -735,4 +734,3 @@ with tab5:
             st.dataframe(resumen_stock, use_container_width=True)
         else:
             st.warning("No se encontraron columnas esperadas en archivo de stock para mostrar.")
-
