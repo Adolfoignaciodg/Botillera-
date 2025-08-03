@@ -440,8 +440,13 @@ with tab3:
                 df_cat = df_cat.copy()
                 df_cat['Subtotal Neto'] = df_cat['Subtotal Neto'].apply(lambda x: f"{int(x):,}".replace(",", "."))
 
-            st.dataframe(df_cat[cols_mostrar], use_container_width=True)
+            # Aplicar estilo para alinear números a la derecha
+            styler = df_cat[cols_mostrar].style.set_properties(
+                subset=['Cantidad', 'Subtotal Neto'],
+                **{'text-align': 'right'}
+            )
 
+            st.dataframe(styler, use_container_width=True)
 
 
 
