@@ -637,22 +637,14 @@ with tab5:
             "⚠️ Bajo Stock" if row[titulo_col_ventas] >= 20 and row.get("Stock", 0) < 5 else ""
         ), axis=1)
 
-        # 🆕 Nuevas columnas
-        if all(col in df_stock_cuadrado.columns for col in ["Margen Unitario", "Precio Venta Bruto"]):
-            df_stock_cuadrado["% Margen"] = df_stock_cuadrado.apply(
-                lambda row: row["Margen Unitario"] / row["Precio Venta Bruto"]
-                if row["Precio Venta Bruto"] and not pd.isna(row["Precio Venta Bruto"])
-                else 0,
-                axis=1
-            )
+        # 🚨 NUEVAS COLUMNAS:
+        df_stock_cuadrado["% Margen"] = df_stock_cuadrado.apply(
+            lambda row: round((row["Margen Unitario"] / row["Precio Venta Bruto"]) * 100, 1)
+            if row["Precio Venta Bruto"] and row["Precio Venta Bruto"] != 0 else 0,
+            axis=1
+        )
 
-        if all(col in df_stock_cuadrado.columns for col in ["Stock", "Costo Neto Prom. Unitario"]):
-            df_stock_cuadrado["Valor en Stock (Costo Total)"] = df_stock_cuadrado.apply(
-                lambda row: row["Stock"] * row["Costo Neto Prom. Unitario"]
-                if not pd.isna(row["Stock"]) and not pd.isna(row["Costo Neto Prom. Unitario"])
-                else 0,
-                axis=1
-            )
+        df_stock_cuadrado["Valor en Stock (Costo Total)"] = df_stock_cuadrado["Stock"] * df_stock_cuadrado["Costo Neto Prom. Unitario"]
 
         columnas_mostrar = [
             "Alerta",
@@ -661,12 +653,11 @@ with tab5:
             titulo_col_ventas,
             "Cantidad por Despachar",
             "Cantidad Disponible",
-            "Por Recibir",
+            "Costo Neto Prom. Unitario",
             "Precio Venta Bruto",
             "Margen Unitario",
             "% Margen",
             "Valor en Stock (Costo Total)",
-            "Costo Neto Prom. Unitario",
             "Marca"
         ]
         columnas_mostrar = [c for c in columnas_mostrar if c in df_stock_cuadrado.columns]
@@ -683,7 +674,7 @@ with tab5:
             except:
                 return val
 
-        columnas_formato_entero = [c for c in columnas_mostrar if any(k in c.lower() for k in ["stock", "cantidad", "por recibir", "vendidas"])]
+        columnas_formato_entero = [c for c in columnas_mostrar if any(k in c.lower() for k in ["stock", "cantidad", "vendidas"])]
         columnas_formato_moneda = [c for c in columnas_mostrar if any(k in c.lower() for k in ["precio", "costo", "margen", "valor"])]
 
         df_mostrar = df_stock_cuadrado[columnas_mostrar].copy()
@@ -716,7 +707,7 @@ with tab5:
         )
         st.dataframe(styled_df, use_container_width=True)
 
-        palabras_clave = ['stock', 'cantidad por despachar', 'cantidad disponible', 'por recibir']
+        palabras_clave = ['stock', 'cantidad por despachar', 'cantidad disponible']
         columnas_resumen = [c for c in columnas_mostrar if any(p in c.lower() for p in palabras_clave)]
 
         if columnas_resumen:
