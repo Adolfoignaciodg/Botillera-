@@ -566,8 +566,6 @@ with tab5:
         titulo_col_ventas = f"Vendidas desde {meses_es[mes_desde_num]} hasta {mes_hasta_str}"
         ventas_por_producto.columns = ['Producto Completo', titulo_col_ventas]
 
-        # Agregar columna margen unitario * vendidas para margen total en periodo
-        # Primero merge para tener margen unitario y cantidad vendida juntos
         df_stock_cuadrado = pd.merge(
             df_stock_filtrado,
             ventas_por_producto,
@@ -577,19 +575,18 @@ with tab5:
 
         df_stock_cuadrado[titulo_col_ventas] = df_stock_cuadrado[titulo_col_ventas].fillna(0)
 
-        # Calcular nuevo margen total = margen unitario * vendidas periodo
-        if 'Margen Unitario' in df_stock_cuadrado.columns:
-            df_stock_cuadrado['Margen x Vendidas periodo'] = df_stock_cuadrado['Margen Unitario'] * df_stock_cuadrado[titulo_col_ventas]
-        else:
-            df_stock_cuadrado['Margen x Vendidas periodo'] = 0
+        # Ya no calculamos "Margen x Vendidas periodo"
+        # if 'Margen Unitario' in df_stock_cuadrado.columns:
+        #     df_stock_cuadrado['Margen x Vendidas periodo'] = df_stock_cuadrado['Margen Unitario'] * df_stock_cuadrado[titulo_col_ventas]
+        # else:
+        #     df_stock_cuadrado['Margen x Vendidas periodo'] = 0
 
-        # Crear columna Alerta
         df_stock_cuadrado["Alerta"] = df_stock_cuadrado.apply(lambda row: (
             "❗ Sin ventas" if row[titulo_col_ventas] == 0 else
             "⚠️ Bajo Stock" if row[titulo_col_ventas] >= 20 and row.get("Stock", 0) < 5 else ""
         ), axis=1)
 
-        # Definir columnas en el orden que quieres (ojo que deben existir en df)
+        # Columnas en orden solicitado, sin "Margen x Vendidas periodo"
         columnas_mostrar = [
             "Alerta",
             "Producto Completo",
@@ -600,11 +597,10 @@ with tab5:
             "Por Recibir",
             "Precio Venta Bruto",
             "Margen Unitario",
-            "Margen x Vendidas periodo",
+            #"Margen x Vendidas periodo",  # eliminado
             "Costo Neto Prom. Unitario",
             "Marca"
         ]
-        # Filtrar solo las columnas que sí existen
         columnas_mostrar = [c for c in columnas_mostrar if c in df_stock_cuadrado.columns]
 
         def formato_visual(val, tipo="entero"):
@@ -632,7 +628,6 @@ with tab5:
             if col in df_mostrar.columns:
                 df_mostrar[col] = df_mostrar[col].apply(lambda x: formato_visual(x, tipo="moneda"))
 
-        # Ordenar alertas arriba
         df_mostrar["__orden_alerta__"] = df_stock_cuadrado["Alerta"].apply(lambda x: 0 if "❗" in x else 1 if "⚠️" in x else 2)
         df_mostrar = df_mostrar.sort_values("__orden_alerta__").drop(columns="__orden_alerta__")
 
