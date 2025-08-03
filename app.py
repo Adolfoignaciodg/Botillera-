@@ -449,7 +449,6 @@ with tab3:
             st.dataframe(styler, use_container_width=True)
 
 
-
 with tab4:
     st.markdown("## 🧾 Productos Repetidos y No Registrados")
 
