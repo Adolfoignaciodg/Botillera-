@@ -201,22 +201,34 @@ with tab1:
         display_val = f"{int(valor):,}".replace(",", ".") if m == 'Cantidad' else formato_moneda(valor)
         cols_metrics[idx].metric(m, display_val)
 
+    # --- Crear columna Producto Completo ---
+    if '+Variante' in df_filtrado.columns:
+        df_filtrado['Producto Completo'] = df_filtrado.apply(
+            lambda row: row[col_producto] if pd.isna(row['+Variante']) or str(row['+Variante']).strip() == ""
+            else f"{row[col_producto]} ({str(row['+Variante']).strip()})",
+            axis=1
+        )
+    else:
+        df_filtrado['Producto Completo'] = df_filtrado[col_producto]
+
+    df_filtrado['Producto Completo'] = df_filtrado['Producto Completo'].str.upper().str.strip()
+
     st.markdown(f"## 🛒 Cantidades Vendidas por Producto en categoría '{seleccion_tipo_producto or 'Todos'}' " +
                 (f"y Mes '{seleccion_mes}'" if seleccion_mes != 'Todos' else "(todo el tiempo)"))
 
     df_cantidades = df_filtrado.copy()
     if seleccion_producto != "Todos":
-        df_cantidades = df_cantidades[df_cantidades[col_producto] == seleccion_producto]
+        df_cantidades = df_cantidades[df_cantidades['Producto Completo'] == seleccion_producto]
 
-    cantidades_por_producto = df_cantidades.groupby(col_producto)['Cantidad'].sum().reset_index().sort_values(by='Cantidad', ascending=False)
+    cantidades_por_producto = df_cantidades.groupby('Producto Completo')['Cantidad'].sum().reset_index().sort_values(by='Cantidad', ascending=False)
     st.dataframe(cantidades_por_producto, use_container_width=True)
 
     st.markdown(f"## 📅 Detalle Diario de Ventas " +
                 (f"para producto '{seleccion_producto}'" if seleccion_producto != "Todos" else "para todos los productos"))
 
     if seleccion_producto == "Todos":
-        detalle_diario = df_filtrado.groupby([col_producto, col_fecha])['Cantidad'].sum().reset_index()
-        pivot_diario = detalle_diario.pivot(index=col_producto, columns=col_fecha, values='Cantidad').fillna(0)
+        detalle_diario = df_filtrado.groupby(['Producto Completo', col_fecha])['Cantidad'].sum().reset_index()
+        pivot_diario = detalle_diario.pivot(index='Producto Completo', columns=col_fecha, values='Cantidad').fillna(0)
         pivot_diario = pivot_diario.sort_index(axis=1)
         fechas_formateadas = pivot_diario.columns.strftime('%d/%m/%Y')
         pivot_diario.columns = fechas_formateadas
@@ -249,7 +261,7 @@ with tab1:
         # Mostrar productos sin ventas
         if seleccion_tipo_producto != "Todos" and seleccion_tipo_producto is not None:
             productos_en_categoria = df[df[col_tipo_producto] == seleccion_tipo_producto][col_producto].drop_duplicates()
-            productos_vendidos = df_filtrado[col_producto].drop_duplicates()
+            productos_vendidos = df_filtrado['Producto Completo'].drop_duplicates()
             productos_no_vendidos = productos_en_categoria[~productos_en_categoria.isin(productos_vendidos)]
 
             st.markdown(f"## 🚫 Productos SIN ventas en categoría '{seleccion_tipo_producto}'")
@@ -258,9 +270,9 @@ with tab1:
             else:
                 st.info("Todos los productos de esta categoría han sido vendidos en el periodo seleccionado.")
 
-        prod_para_graf = st.selectbox("Seleccionar Producto para gráfico diario", ["Todos"] + sorted(detalle_diario[col_producto].unique()))
+        prod_para_graf = st.selectbox("Seleccionar Producto para gráfico diario", ["Todos"] + sorted(detalle_diario['Producto Completo'].unique()))
         if prod_para_graf != "Todos":
-            df_graf = detalle_diario[detalle_diario[col_producto] == prod_para_graf]
+            df_graf = detalle_diario[detalle_diario['Producto Completo'] == prod_para_graf]
             graf_diario = alt.Chart(df_graf).mark_line(point=True).encode(
                 x=alt.X(col_fecha, title="Fecha", axis=alt.Axis(format='%d/%m/%Y')),
                 y=alt.Y('Cantidad', title="Cantidad Vendida"),
@@ -272,7 +284,7 @@ with tab1:
             st.altair_chart(graf_diario, use_container_width=True)
 
     else:
-        detalle_diario = df_filtrado.groupby(col_fecha)['Cantidad'].sum().reset_index().sort_values(col_fecha)
+        detalle_diario = df_filtrado[df_filtrado['Producto Completo'] == seleccion_producto].groupby(col_fecha)['Cantidad'].sum().reset_index().sort_values(col_fecha)
         st.dataframe(detalle_diario, use_container_width=True)
 
         graf_diario = alt.Chart(detalle_diario).mark_line(point=True).encode(
@@ -284,6 +296,7 @@ with tab1:
             ]
         ).properties(height=300)
         st.altair_chart(graf_diario, use_container_width=True)
+
 
 with tab2:
     st.markdown("## 🔍 Análisis ABC de Productos")
