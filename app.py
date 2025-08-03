@@ -492,152 +492,176 @@ with tab5:
             'ENERGETICAS E ISOTONICAS', 'ESPUMANTES'
         ]
 
+        # Encuentra columna con categoría (tipo de producto)
         col_categoria_stock = next((c for c in df_stock.columns if "tipo de producto" in c.lower()), None)
-
         if not col_categoria_stock:
             st.error("No se encontró columna de categoría en archivo de stock.")
-        else:
-            df_stock_filtrado = df_stock[df_stock[col_categoria_stock].str.upper().isin(categorias_clave)]
+            st.stop()
 
-            categorias_disponibles = sorted(df_stock_filtrado[col_categoria_stock].dropna().unique())
-            seleccion_cat_stock = st.selectbox("Seleccionar Categoría", ["Todas"] + categorias_disponibles)
+        # Filtrar por categorías relevantes
+        df_stock_filtrado = df_stock[df_stock[col_categoria_stock].str.upper().isin(categorias_clave)]
 
-            if seleccion_cat_stock != "Todas":
-                df_stock_filtrado = df_stock_filtrado[df_stock_filtrado[col_categoria_stock] == seleccion_cat_stock]
+        categorias_disponibles = sorted(df_stock_filtrado[col_categoria_stock].dropna().unique())
+        seleccion_cat_stock = st.selectbox("Seleccionar Categoría", ["Todas"] + categorias_disponibles)
 
-            # Crear columna concatenada Producto Completo, sin espacios extras si variante está vacía o NaN
-            df_stock_filtrado['Producto Completo'] = df_stock_filtrado.apply(
-                lambda row: row['Producto'] if pd.isna(row['Variante']) or row['Variante'].strip() == ""
-                else f"{row['Producto']} {row['Variante'].strip()}",
+        if seleccion_cat_stock != "Todas":
+            df_stock_filtrado = df_stock_filtrado[df_stock_filtrado[col_categoria_stock] == seleccion_cat_stock]
+
+        # Crear columna "Producto Completo" en stock: Producto + Variante si Variante existe
+        df_stock_filtrado['Producto Completo'] = df_stock_filtrado.apply(
+            lambda row: row['Producto'] if pd.isna(row['Variante']) or str(row['Variante']).strip() == ""
+            else f"{row['Producto']} {str(row['Variante']).strip()}",
+            axis=1
+        )
+
+        # Normalizar texto para evitar problemas en merge
+        df_stock_filtrado['Producto Completo'] = df_stock_filtrado['Producto Completo'].str.upper().str.strip()
+
+        # --- Carga de ventas ---
+        # Aquí debes cargar el df de ventas (df), asumo que ya tienes df cargado con tus datos de ventas
+        # y que tiene columnas +Producto / Servicio + Variante, +Cantidad, +Fecha Documento, etc.
+
+        # Definir nombres columna producto y fecha para facilitar
+        col_producto = '+Producto / Servicio'
+        col_variante = '+Variante'
+        col_producto_variante = '+Producto / Servicio + Variante'
+        col_cantidad = 'Cantidad'
+        col_fecha = '+Fecha Documento'
+
+        # Asegurar columna fecha en datetime
+        df[col_fecha] = pd.to_datetime(df[col_fecha], errors='coerce')
+
+        # Mapeo meses español para selectbox
+        meses_es = {
+            1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
+            5: "mayo", 6: "junio", 7: "julio", 8: "agosto",
+            9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre"
+        }
+
+        meses_en_df = sorted(df[col_fecha].dt.month.dropna().unique())
+        meses_nombre = [meses_es[m].capitalize() for m in meses_en_df]
+
+        seleccion_mes = st.selectbox("Ventas acumuladas desde mes:", ["Enero"] + meses_nombre)
+
+        inv_meses_es = {v.lower(): k for k, v in meses_es.items()}
+        mes_desde_num = inv_meses_es.get(seleccion_mes.lower(), 1)
+
+        mes_max_num = int(df[col_fecha].dt.month.max())
+        mes_hasta_str = meses_es.get(mes_max_num, "mes desconocido")
+
+        from pandas.tseries.offsets import MonthBegin
+
+        anio_min = int(df[col_fecha].dt.year.min())
+        anio_max = int(df[col_fecha].dt.year.max())
+
+        fecha_inicio = pd.Timestamp(year=anio_min, month=mes_desde_num, day=1)
+        fecha_fin = (pd.Timestamp(year=anio_max, month=mes_max_num, day=1) + MonthBegin(1)) - pd.Timedelta(days=1)
+
+        ventas_rango = df[(df[col_fecha] >= fecha_inicio) & (df[col_fecha] <= fecha_fin)].copy()
+
+        # Crear Producto Completo en ventas igual que en stock
+        if col_variante in ventas_rango.columns:
+            ventas_rango['Producto Completo'] = ventas_rango.apply(
+                lambda row: row[col_producto] if pd.isna(row[col_variante]) or str(row[col_variante]).strip() == ""
+                else f"{row[col_producto]} {str(row[col_variante]).strip()}",
                 axis=1
             )
+        else:
+            ventas_rango['Producto Completo'] = ventas_rango[col_producto]
 
-            # Asegurarse que la columna fecha está en datetime
-            df[col_fecha] = pd.to_datetime(df[col_fecha], errors='coerce')
+        ventas_rango['Producto Completo'] = ventas_rango['Producto Completo'].str.upper().str.strip()
 
-            meses_es = {
-                1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
-                5: "mayo", 6: "junio", 7: "julio", 8: "agosto",
-                9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre"
-            }
+        # Agrupar cantidad vendida por Producto Completo
+        ventas_por_producto = ventas_rango.groupby('Producto Completo')[col_cantidad].sum().reset_index()
 
-            meses_en_df = sorted(df[col_fecha].dt.month.dropna().unique())
-            meses_nombre = [meses_es[m].capitalize() for m in meses_en_df]
+        titulo_col_ventas = f"Vendidas desde {meses_es[mes_desde_num]} hasta {mes_hasta_str}"
+        ventas_por_producto.columns = ['Producto Completo', titulo_col_ventas]
 
-            seleccion_mes = st.selectbox("Ventas acumuladas desde mes:", ["Enero"] + meses_nombre)
+        # Merge cuadratura stock + ventas
+        df_stock_cuadrado = pd.merge(
+            df_stock_filtrado,
+            ventas_por_producto,
+            on='Producto Completo',
+            how='left'
+        )
 
-            inv_meses_es = {v.lower(): k for k, v in meses_es.items()}
-            mes_desde_num = inv_meses_es.get(seleccion_mes.lower(), 1)
+        df_stock_cuadrado[titulo_col_ventas] = df_stock_cuadrado[titulo_col_ventas].fillna(0)
 
-            mes_max_num = int(df[col_fecha].dt.month.max())
-            mes_hasta_str = meses_es.get(mes_max_num, "mes desconocido")
+        # Generar alertas simples
+        df_stock_cuadrado["Alerta"] = df_stock_cuadrado.apply(lambda row: (
+            "❗ Sin ventas" if row[titulo_col_ventas] == 0 else
+            "⚠️ Bajo Stock" if row[titulo_col_ventas] >= 20 and row.get("Stock", 0) < 5 else ""
+        ), axis=1)
 
-            from pandas.tseries.offsets import MonthBegin
+        # Columnas para mostrar (ajusta si tus nombres cambian)
+        posibles_cols = [
+            "Producto Completo", "Marca", "Stock", "Cantidad por Despachar",
+            "Cantidad Disponible", "Por Recibir", "Costo Neto Prom. Unitario",
+            "Precio Venta Bruto", "Margen Unitario"
+        ]
+        columnas_mostrar = [c for c in posibles_cols if c in df_stock_cuadrado.columns]
+        columnas_mostrar += [titulo_col_ventas, "Alerta"]
 
-            anio_min = int(df[col_fecha].dt.year.min())
-            anio_max = int(df[col_fecha].dt.year.max())
-
-            fecha_inicio = pd.Timestamp(year=anio_min, month=mes_desde_num, day=1)
-            fecha_fin = (pd.Timestamp(year=anio_max, month=mes_max_num, day=1) + MonthBegin(1)) - pd.Timedelta(days=1)
-
-            ventas_rango = df[(df[col_fecha] >= fecha_inicio) & (df[col_fecha] <= fecha_fin)]
-
-            # Crear columna Producto Completo en ventas, idéntica a la de stock para merge correcto
-            # Si tienes columna Variante en ventas, concatena igual. Si no, solo Producto.
-            if 'Variante' in ventas_rango.columns:
-                ventas_rango['Producto Completo'] = ventas_rango.apply(
-                    lambda row: row[col_producto] if pd.isna(row['Variante']) or row['Variante'].strip() == ""
-                    else f"{row[col_producto]} {row['Variante'].strip()}",
-                    axis=1
-                )
-            else:
-                ventas_rango['Producto Completo'] = ventas_rango[col_producto]
-
-            ventas_por_producto = ventas_rango.groupby('Producto Completo')['Cantidad'].sum().reset_index()
-
-            titulo_col_ventas = f"Vendidas desde {meses_es[mes_desde_num]} hasta {mes_hasta_str}"
-            ventas_por_producto.columns = ['Producto Completo', titulo_col_ventas]
-
-            col_prod_stock = "Producto Completo"
-
-            df_stock_cuadrado = pd.merge(
-                df_stock_filtrado, ventas_por_producto,
-                left_on=col_prod_stock, right_on='Producto Completo', how='left'
-            )
-            df_stock_cuadrado[titulo_col_ventas] = df_stock_cuadrado[titulo_col_ventas].fillna(0)
-
-            df_stock_cuadrado["Alerta"] = df_stock_cuadrado.apply(lambda row: (
-                "❗ Sin ventas" if row[titulo_col_ventas] == 0 else
-                "⚠️ Bajo Stock" if row[titulo_col_ventas] >= 20 and row.get("Stock Actual", 0) < 5 else ""
-            ), axis=1)
-
-            posibles_cols = [
-                "Producto Completo", "Marca", "Stock Actual", "Cantidad por Despachar",
-                "Cantidad Disponible", "Por Recibir", "Costo Neto Prom. Unitario",
-                "Precio Venta Bruto", "Margen Unitario"
-            ]
-            columnas_mostrar = [c for pc in posibles_cols for c in df_stock_cuadrado.columns if pc.lower() == c.lower()]
-            columnas_mostrar += [titulo_col_ventas, "Alerta"]
-
-            def formato_visual(val, tipo="entero"):
-                try:
-                    val = float(val)
-                    if tipo == "moneda":
-                        return f"${val:,.0f}".replace(",", ".")
-                    elif tipo == "entero":
-                        return f"{int(val):,}".replace(",", ".")
-                    else:
-                        return val
-                except:
+        # Función para formato visual
+        def formato_visual(val, tipo="entero"):
+            try:
+                val = float(val)
+                if tipo == "moneda":
+                    return f"${val:,.0f}".replace(",", ".")
+                elif tipo == "entero":
+                    return f"{int(val):,}".replace(",", ".")
+                else:
                     return val
+            except:
+                return val
 
-            columnas_formato_entero = [c for c in columnas_mostrar if any(k in c.lower() for k in ["stock", "cantidad", "por recibir", "vendidas"])]
-            columnas_formato_moneda = [c for c in columnas_mostrar if any(k in c.lower() for k in ["precio", "costo", "margen"])]
+        columnas_formato_entero = [c for c in columnas_mostrar if any(k in c.lower() for k in ["stock", "cantidad", "por recibir", "vendidas"])]
+        columnas_formato_moneda = [c for c in columnas_mostrar if any(k in c.lower() for k in ["precio", "costo", "margen"])]
 
-            df_mostrar = df_stock_cuadrado[columnas_mostrar].copy()
+        df_mostrar = df_stock_cuadrado[columnas_mostrar].copy()
 
-            for col in columnas_formato_entero:
-                if col in df_mostrar.columns:
-                    df_mostrar[col] = df_mostrar[col].apply(lambda x: formato_visual(x, tipo="entero"))
+        for col in columnas_formato_entero:
+            if col in df_mostrar.columns:
+                df_mostrar[col] = df_mostrar[col].apply(lambda x: formato_visual(x, tipo="entero"))
 
-            for col in columnas_formato_moneda:
-                if col in df_mostrar.columns:
-                    df_mostrar[col] = df_mostrar[col].apply(lambda x: formato_visual(x, tipo="moneda"))
+        for col in columnas_formato_moneda:
+            if col in df_mostrar.columns:
+                df_mostrar[col] = df_mostrar[col].apply(lambda x: formato_visual(x, tipo="moneda"))
 
-            df_mostrar["__orden_alerta__"] = df_stock_cuadrado["Alerta"].apply(lambda x: 0 if "❗" in x else 1 if "⚠️" in x else 2)
-            df_mostrar = df_mostrar.sort_values("__orden_alerta__").drop(columns="__orden_alerta__")
+        df_mostrar["__orden_alerta__"] = df_stock_cuadrado["Alerta"].apply(lambda x: 0 if "❗" in x else 1 if "⚠️" in x else 2)
+        df_mostrar = df_mostrar.sort_values("__orden_alerta__").drop(columns="__orden_alerta__")
 
-            def destacar_stock(val):
-                try:
-                    if float(str(val).replace(".", "").replace("$", "")) == 0:
-                        return 'background-color: #ff4d4d; color: white; font-weight: bold'
-                    elif float(str(val).replace(".", "").replace("$", "")) < 5:
-                        return 'background-color: #ffcc00; font-weight: bold'
-                except:
-                    return ''
+        def destacar_stock(val):
+            try:
+                val_float = float(str(val).replace(".", "").replace("$", ""))
+                if val_float == 0:
+                    return 'background-color: #ff4d4d; color: white; font-weight: bold'
+                elif val_float < 5:
+                    return 'background-color: #ffcc00; font-weight: bold'
+            except:
+                return ''
 
-            st.markdown(f"### Tabla de stock + {titulo_col_ventas}")
-            styled_df = df_mostrar.style.applymap(
-                destacar_stock,
-                subset=[c for c in columnas_formato_entero if "stock" in c.lower()]
-            )
-            st.dataframe(styled_df, use_container_width=True)
+        st.markdown(f"### Tabla de stock + {titulo_col_ventas}")
+        styled_df = df_mostrar.style.applymap(
+            destacar_stock,
+            subset=[c for c in columnas_formato_entero if "stock" in c.lower()]
+        )
+        st.dataframe(styled_df, use_container_width=True)
 
-            palabras_clave = ['stock', 'cantidad por despachar', 'cantidad disponible', 'por recibir']
-            columnas_resumen = [c for c in columnas_mostrar if any(p in c.lower() for p in palabras_clave)]
+        # Resumen por categoría
+        palabras_clave = ['stock', 'cantidad por despachar', 'cantidad disponible', 'por recibir']
+        columnas_resumen = [c for c in columnas_mostrar if any(p in c.lower() for p in palabras_clave)]
 
-            if columnas_resumen:
-                resumen_stock = df_stock_cuadrado.groupby(col_categoria_stock).agg(
-                    {c: 'sum' for c in columnas_resumen if c in df_stock_cuadrado.columns}
-                ).reset_index()
+        if columnas_resumen:
+            resumen_stock = df_stock_cuadrado.groupby(col_categoria_stock).agg(
+                {c: 'sum' for c in columnas_resumen if c in df_stock_cuadrado.columns}
+            ).reset_index()
 
-                for col in resumen_stock.columns:
-                    if col != col_categoria_stock and col in columnas_formato_entero:
-                        resumen_stock[col] = resumen_stock[col].apply(lambda x: formato_visual(x, tipo="entero"))
+            for col in resumen_stock.columns:
+                if col != col_categoria_stock and col in columnas_formato_entero:
+                    resumen_stock[col] = resumen_stock[col].apply(lambda x: formato_visual(x, tipo="entero"))
 
-                st.markdown("### Resumen por Categoría")
-                st.dataframe(resumen_stock, use_container_width=True)
-
-            else:
-                st.warning("No se encontraron columnas esperadas en archivo de stock para mostrar.")
-
+            st.markdown("### Resumen por Categoría")
+            st.dataframe(resumen_stock, use_container_width=True)
+        else:
+            st.warning("No se encontraron columnas esperadas en archivo de stock para mostrar.")
