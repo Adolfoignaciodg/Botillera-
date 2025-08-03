@@ -566,6 +566,7 @@ with tab5:
         if seleccion_cat_stock != "Todas":
             df_stock_filtrado = df_stock_filtrado[df_stock_filtrado[col_categoria_stock] == seleccion_cat_stock]
 
+        # Crear columna "Producto Completo" como Producto (Variante) si Variante existe
         df_stock_filtrado['Producto Completo'] = df_stock_filtrado.apply(
             lambda row: row['Producto'] if pd.isna(row['Variante']) or str(row['Variante']).strip() == ""
             else f"{row['Producto']} ({str(row['Variante']).strip()})",
@@ -573,6 +574,7 @@ with tab5:
         )
         df_stock_filtrado['Producto Completo'] = df_stock_filtrado['Producto Completo'].str.upper().str.strip()
 
+        # --- Carga de ventas ---
         col_producto = '+Producto / Servicio'
         col_variante = '+Variante'
         col_cantidad = 'Cantidad'
@@ -607,6 +609,7 @@ with tab5:
 
         ventas_rango = df[(df[col_fecha] >= fecha_inicio) & (df[col_fecha] <= fecha_fin)].copy()
 
+        # Crear columna "Producto Completo" también en ventas
         if col_variante in ventas_rango.columns:
             ventas_rango['Producto Completo'] = ventas_rango.apply(
                 lambda row: row[col_producto] if pd.isna(row[col_variante]) or str(row[col_variante]).strip() == ""
@@ -618,6 +621,7 @@ with tab5:
 
         ventas_rango['Producto Completo'] = ventas_rango['Producto Completo'].str.upper().str.strip()
 
+        # Suma cantidad vendida por producto
         ventas_por_producto = ventas_rango.groupby('Producto Completo')[col_cantidad].sum().reset_index()
 
         titulo_col_ventas = f"Vendidas desde {meses_es[mes_desde_num]} hasta {mes_hasta_str}"
@@ -632,20 +636,26 @@ with tab5:
 
         df_stock_cuadrado[titulo_col_ventas] = df_stock_cuadrado[titulo_col_ventas].fillna(0)
 
+        # Agregar columna "Valor en Stock (Costo Total)"
+        if "Stock" in df_stock_cuadrado.columns and "Costo Neto Prom. Unitario" in df_stock_cuadrado.columns:
+            df_stock_cuadrado["Valor en Stock (Costo Total)"] = (
+                df_stock_cuadrado["Stock"].fillna(0) * df_stock_cuadrado["Costo Neto Prom. Unitario"].fillna(0)
+            )
+        else:
+            df_stock_cuadrado["Valor en Stock (Costo Total)"] = 0
+
+        # Ya no calculamos "Margen x Vendidas periodo"
+        # if 'Margen Unitario' in df_stock_cuadrado.columns:
+        #     df_stock_cuadrado['Margen x Vendidas periodo'] = df_stock_cuadrado['Margen Unitario'] * df_stock_cuadrado[titulo_col_ventas]
+        # else:
+        #     df_stock_cuadrado['Margen x Vendidas periodo'] = 0
+
         df_stock_cuadrado["Alerta"] = df_stock_cuadrado.apply(lambda row: (
             "❗ Sin ventas" if row[titulo_col_ventas] == 0 else
             "⚠️ Bajo Stock" if row[titulo_col_ventas] >= 20 and row.get("Stock", 0) < 5 else ""
         ), axis=1)
 
-        # 🚨 NUEVAS COLUMNAS:
-        df_stock_cuadrado["% Margen"] = df_stock_cuadrado.apply(
-            lambda row: round((row["Margen Unitario"] / row["Precio Venta Bruto"]) * 100, 1)
-            if row["Precio Venta Bruto"] and row["Precio Venta Bruto"] != 0 else 0,
-            axis=1
-        )
-
-        df_stock_cuadrado["Valor en Stock (Costo Total)"] = df_stock_cuadrado["Stock"] * df_stock_cuadrado["Costo Neto Prom. Unitario"]
-
+        # Añadir "Valor en Stock (Costo Total)" a columnas a mostrar
         columnas_mostrar = [
             "Alerta",
             "Producto Completo",
@@ -653,10 +663,11 @@ with tab5:
             titulo_col_ventas,
             "Cantidad por Despachar",
             "Cantidad Disponible",
-            "Costo Neto Prom. Unitario",
+            "Por Recibir",
             "Precio Venta Bruto",
             "Margen Unitario",
-            "% Margen",
+            #"Margen x Vendidas periodo",  # eliminado
+            "Costo Neto Prom. Unitario",
             "Valor en Stock (Costo Total)",
             "Marca"
         ]
@@ -666,7 +677,8 @@ with tab5:
             try:
                 val = float(val)
                 if tipo == "moneda":
-                    return f"${val:,.0f}".replace(",", ".")
+                    # Formato chileno con 2 decimales y coma decimal
+                    return f"${val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                 elif tipo == "entero":
                     return f"{int(val):,}".replace(",", ".")
                 else:
@@ -674,7 +686,7 @@ with tab5:
             except:
                 return val
 
-        columnas_formato_entero = [c for c in columnas_mostrar if any(k in c.lower() for k in ["stock", "cantidad", "vendidas"])]
+        columnas_formato_entero = [c for c in columnas_mostrar if any(k in c.lower() for k in ["stock", "cantidad", "por recibir", "vendidas"])]
         columnas_formato_moneda = [c for c in columnas_mostrar if any(k in c.lower() for k in ["precio", "costo", "margen", "valor"])]
 
         df_mostrar = df_stock_cuadrado[columnas_mostrar].copy()
@@ -707,7 +719,7 @@ with tab5:
         )
         st.dataframe(styled_df, use_container_width=True)
 
-        palabras_clave = ['stock', 'cantidad por despachar', 'cantidad disponible']
+        palabras_clave = ['stock', 'cantidad por despachar', 'cantidad disponible', 'por recibir']
         columnas_resumen = [c for c in columnas_mostrar if any(p in c.lower() for p in palabras_clave)]
 
         if columnas_resumen:
