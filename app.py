@@ -640,3 +640,4 @@ with tab5:
 
             else:
                 st.warning("No se encontraron columnas esperadas en archivo de stock para mostrar.")
+
