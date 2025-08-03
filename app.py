@@ -492,7 +492,6 @@ with tab5:
             'ENERGETICAS E ISOTONICAS', 'ESPUMANTES'
         ]
 
-        # Buscar columna de categoría
         col_categoria_stock = next((c for c in df_stock.columns if "tipo de producto" in c.lower()), None)
 
         if not col_categoria_stock:
@@ -506,13 +505,16 @@ with tab5:
             if seleccion_cat_stock != "Todas":
                 df_stock_filtrado = df_stock_filtrado[df_stock_filtrado[col_categoria_stock] == seleccion_cat_stock]
 
-            # Crear columna concatenada Producto Completo en df_stock_filtrado
-            df_stock_filtrado['Producto Completo'] = df_stock_filtrado['Producto'] + ' ' + df_stock_filtrado['Variante']  # <--
+            # Crear columna concatenada Producto Completo, sin espacios extras si variante está vacía o NaN
+            df_stock_filtrado['Producto Completo'] = df_stock_filtrado.apply(
+                lambda row: row['Producto'] if pd.isna(row['Variante']) or row['Variante'].strip() == ""
+                else f"{row['Producto']} {row['Variante'].strip()}",
+                axis=1
+            )
 
             # Asegurarse que la columna fecha está en datetime
             df[col_fecha] = pd.to_datetime(df[col_fecha], errors='coerce')
 
-            # Diccionario meses español
             meses_es = {
                 1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
                 5: "mayo", 6: "junio", 7: "julio", 8: "agosto",
@@ -540,17 +542,23 @@ with tab5:
 
             ventas_rango = df[(df[col_fecha] >= fecha_inicio) & (df[col_fecha] <= fecha_fin)]
 
-            # Crear columna Producto Completo en df de ventas para poder hacer merge correcto
-            ventas_rango['Producto Completo'] = ventas_rango[col_producto]  # Asumiendo col_producto es solo nombre de producto
-            # Si ventas tiene columna Variante y quieres concatenar, hazlo aquí. Si no, deja así.
+            # Crear columna Producto Completo en ventas, idéntica a la de stock para merge correcto
+            # Si tienes columna Variante en ventas, concatena igual. Si no, solo Producto.
+            if 'Variante' in ventas_rango.columns:
+                ventas_rango['Producto Completo'] = ventas_rango.apply(
+                    lambda row: row[col_producto] if pd.isna(row['Variante']) or row['Variante'].strip() == ""
+                    else f"{row[col_producto]} {row['Variante'].strip()}",
+                    axis=1
+                )
+            else:
+                ventas_rango['Producto Completo'] = ventas_rango[col_producto]
 
-            # Agrupar ventas por Producto Completo
             ventas_por_producto = ventas_rango.groupby('Producto Completo')['Cantidad'].sum().reset_index()
 
             titulo_col_ventas = f"Vendidas desde {meses_es[mes_desde_num]} hasta {mes_hasta_str}"
             ventas_por_producto.columns = ['Producto Completo', titulo_col_ventas]
 
-            col_prod_stock = "Producto Completo"  # Ahora usamos la columna concatenada
+            col_prod_stock = "Producto Completo"
 
             df_stock_cuadrado = pd.merge(
                 df_stock_filtrado, ventas_por_producto,
@@ -632,4 +640,3 @@ with tab5:
 
             else:
                 st.warning("No se encontraron columnas esperadas en archivo de stock para mostrar.")
-
