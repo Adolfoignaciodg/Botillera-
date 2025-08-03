@@ -379,7 +379,6 @@ with tab2:
         ).properties(height=400)
 
         st.altair_chart(graf_abc, use_container_width=True)
-
 with tab3:
     st.markdown("## 📋 Detalle de Ventas por Día y Categoría")
 
@@ -430,10 +429,18 @@ with tab3:
             else:
                 df_cat = df_detalle_fecha
 
-            cols_mostrar = ['Producto Completo', 'Cantidad', 'Subtotal Neto']
-            cols_mostrar = [c for c in cols_mostrar if c in df_cat.columns]
-
             df_cat = df_cat.copy()
+
+            # Columnas a mostrar incluyendo tipo de documento, número y vendedor
+            cols_mostrar = [
+                'Producto Completo',
+                '+Tipo de Documento',
+                '+Numero Documento',
+                '+Vendedor',
+                'Cantidad',
+                'Subtotal Neto'
+            ]
+            cols_mostrar = [c for c in cols_mostrar if c in df_cat.columns]
 
             # Formato personalizado para las columnas numéricas
             if 'Cantidad' in df_cat.columns:
@@ -442,7 +449,7 @@ with tab3:
             if 'Subtotal Neto' in df_cat.columns:
                 df_cat['Subtotal Neto'] = df_cat['Subtotal Neto'].apply(lambda x: f"{int(x):,}".replace(",", "."))
 
-            # Estilos: centrar 'Cantidad', alinear a la derecha 'Subtotal Neto'
+            # Estilos personalizados
             styler = df_cat[cols_mostrar].style.set_properties(
                 subset=['Cantidad'], **{'text-align': 'center'}
             ).set_properties(
