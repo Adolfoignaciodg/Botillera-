@@ -668,7 +668,7 @@ with tab5:
             "Margen Unitario",
             #"Margen x Vendidas periodo",
             "Costo Neto Prom. Unitario",
-            "Valor en Stock (Costo Total)",
+            #"Valor en Stock (Costo Total)",  # <--- NO mostrar en tabla detallada
             "Marca"
         ]
         columnas_mostrar = [c for c in columnas_mostrar if c in df_stock_cuadrado.columns]
@@ -718,12 +718,8 @@ with tab5:
         )
         st.dataframe(styled_df, use_container_width=True)
 
-        # --- RESUMEN POR CATEGORÍA con monto incluido ---
-        palabras_clave = ['stock', 'cantidad por despachar', 'cantidad disponible', 'por recibir']
-        columnas_resumen = [c for c in columnas_mostrar if any(p in c.lower() for p in palabras_clave)]
-        # Agregar explícitamente columna de monto para sumar
-        if "Valor en Stock (Costo Total)" in columnas_mostrar:
-            columnas_resumen.append("Valor en Stock (Costo Total)")
+        palabras_clave = ['stock', 'cantidad por despachar', 'cantidad disponible', 'por recibir', 'valor en stock (costo total)']
+        columnas_resumen = [c for c in df_stock_cuadrado.columns if any(p in c.lower() for p in palabras_clave)]
 
         if columnas_resumen:
             resumen_stock = df_stock_cuadrado.groupby(col_categoria_stock).agg(
@@ -731,10 +727,12 @@ with tab5:
             ).reset_index()
 
             for col in resumen_stock.columns:
-                if col != col_categoria_stock and col in columnas_formato_entero:
-                    resumen_stock[col] = resumen_stock[col].apply(lambda x: formato_visual(x, tipo="entero"))
-                elif col == "Valor en Stock (Costo Total)":
-                    resumen_stock[col] = resumen_stock[col].apply(lambda x: formato_visual(x, tipo="moneda"))
+                if col != col_categoria_stock:
+                    # Formato moneda para valores con "valor" o "costo" en el nombre
+                    if "valor" in col.lower() or "costo" in col.lower():
+                        resumen_stock[col] = resumen_stock[col].apply(lambda x: f"${x:,.0f}".replace(",", "."))
+                    else:
+                        resumen_stock[col] = resumen_stock[col].apply(lambda x: f"{int(x):,}".replace(",", "."))
 
             st.markdown("### Resumen por Categoría")
             st.dataframe(resumen_stock, use_container_width=True)
