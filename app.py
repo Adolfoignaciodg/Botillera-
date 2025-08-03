@@ -566,7 +566,6 @@ with tab5:
         if seleccion_cat_stock != "Todas":
             df_stock_filtrado = df_stock_filtrado[df_stock_filtrado[col_categoria_stock] == seleccion_cat_stock]
 
-        # Crear columna "Producto Completo" como Producto (Variante) si Variante existe
         df_stock_filtrado['Producto Completo'] = df_stock_filtrado.apply(
             lambda row: row['Producto'] if pd.isna(row['Variante']) or str(row['Variante']).strip() == ""
             else f"{row['Producto']} ({str(row['Variante']).strip()})",
@@ -574,7 +573,6 @@ with tab5:
         )
         df_stock_filtrado['Producto Completo'] = df_stock_filtrado['Producto Completo'].str.upper().str.strip()
 
-        # --- Carga de ventas ---
         col_producto = '+Producto / Servicio'
         col_variante = '+Variante'
         col_cantidad = 'Cantidad'
@@ -609,7 +607,6 @@ with tab5:
 
         ventas_rango = df[(df[col_fecha] >= fecha_inicio) & (df[col_fecha] <= fecha_fin)].copy()
 
-        # Crear columna "Producto Completo" también en ventas
         if col_variante in ventas_rango.columns:
             ventas_rango['Producto Completo'] = ventas_rango.apply(
                 lambda row: row[col_producto] if pd.isna(row[col_variante]) or str(row[col_variante]).strip() == ""
@@ -621,7 +618,6 @@ with tab5:
 
         ventas_rango['Producto Completo'] = ventas_rango['Producto Completo'].str.upper().str.strip()
 
-        # Suma cantidad vendida por producto
         ventas_por_producto = ventas_rango.groupby('Producto Completo')[col_cantidad].sum().reset_index()
 
         titulo_col_ventas = f"Vendidas desde {meses_es[mes_desde_num]} hasta {mes_hasta_str}"
@@ -636,18 +632,28 @@ with tab5:
 
         df_stock_cuadrado[titulo_col_ventas] = df_stock_cuadrado[titulo_col_ventas].fillna(0)
 
-        # Ya no calculamos "Margen x Vendidas periodo"
-        # if 'Margen Unitario' in df_stock_cuadrado.columns:
-        #     df_stock_cuadrado['Margen x Vendidas periodo'] = df_stock_cuadrado['Margen Unitario'] * df_stock_cuadrado[titulo_col_ventas]
-        # else:
-        #     df_stock_cuadrado['Margen x Vendidas periodo'] = 0
-
         df_stock_cuadrado["Alerta"] = df_stock_cuadrado.apply(lambda row: (
             "❗ Sin ventas" if row[titulo_col_ventas] == 0 else
             "⚠️ Bajo Stock" if row[titulo_col_ventas] >= 20 and row.get("Stock", 0) < 5 else ""
         ), axis=1)
 
-        # Columnas en orden solicitado, sin "Margen x Vendidas periodo"
+        # 🆕 Nuevas columnas
+        if all(col in df_stock_cuadrado.columns for col in ["Margen Unitario", "Precio Venta Bruto"]):
+            df_stock_cuadrado["% Margen"] = df_stock_cuadrado.apply(
+                lambda row: row["Margen Unitario"] / row["Precio Venta Bruto"]
+                if row["Precio Venta Bruto"] and not pd.isna(row["Precio Venta Bruto"])
+                else 0,
+                axis=1
+            )
+
+        if all(col in df_stock_cuadrado.columns for col in ["Stock", "Costo Neto Prom. Unitario"]):
+            df_stock_cuadrado["Valor en Stock (Costo Total)"] = df_stock_cuadrado.apply(
+                lambda row: row["Stock"] * row["Costo Neto Prom. Unitario"]
+                if not pd.isna(row["Stock"]) and not pd.isna(row["Costo Neto Prom. Unitario"])
+                else 0,
+                axis=1
+            )
+
         columnas_mostrar = [
             "Alerta",
             "Producto Completo",
@@ -658,7 +664,8 @@ with tab5:
             "Por Recibir",
             "Precio Venta Bruto",
             "Margen Unitario",
-            #"Margen x Vendidas periodo",  # eliminado
+            "% Margen",
+            "Valor en Stock (Costo Total)",
             "Costo Neto Prom. Unitario",
             "Marca"
         ]
@@ -677,7 +684,7 @@ with tab5:
                 return val
 
         columnas_formato_entero = [c for c in columnas_mostrar if any(k in c.lower() for k in ["stock", "cantidad", "por recibir", "vendidas"])]
-        columnas_formato_moneda = [c for c in columnas_mostrar if any(k in c.lower() for k in ["precio", "costo", "margen"])]
+        columnas_formato_moneda = [c for c in columnas_mostrar if any(k in c.lower() for k in ["precio", "costo", "margen", "valor"])]
 
         df_mostrar = df_stock_cuadrado[columnas_mostrar].copy()
 
