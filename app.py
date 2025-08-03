@@ -505,7 +505,6 @@ with tab5:
         if seleccion_cat_stock != "Todas":
             df_stock_filtrado = df_stock_filtrado[df_stock_filtrado[col_categoria_stock] == seleccion_cat_stock]
 
-        # ✅ Crear columna "Producto Completo" como Producto (Variante) si Variante existe
         df_stock_filtrado['Producto Completo'] = df_stock_filtrado.apply(
             lambda row: row['Producto'] if pd.isna(row['Variante']) or str(row['Variante']).strip() == ""
             else f"{row['Producto']} ({str(row['Variante']).strip()})",
@@ -513,7 +512,6 @@ with tab5:
         )
         df_stock_filtrado['Producto Completo'] = df_stock_filtrado['Producto Completo'].str.upper().str.strip()
 
-        # --- Carga de ventas ---
         col_producto = '+Producto / Servicio'
         col_variante = '+Variante'
         col_producto_variante = '+Producto / Servicio + Variante'
@@ -530,17 +528,13 @@ with tab5:
 
         meses_en_df = sorted(df[col_fecha].dt.month.dropna().unique())
         meses_nombre = [meses_es[m].capitalize() for m in meses_en_df]
-
         seleccion_mes = st.selectbox("Ventas acumuladas desde mes:", ["Enero"] + meses_nombre)
-
         inv_meses_es = {v.lower(): k for k, v in meses_es.items()}
         mes_desde_num = inv_meses_es.get(seleccion_mes.lower(), 1)
-
         mes_max_num = int(df[col_fecha].dt.month.max())
         mes_hasta_str = meses_es.get(mes_max_num, "mes desconocido")
 
         from pandas.tseries.offsets import MonthBegin
-
         anio_min = int(df[col_fecha].dt.year.min())
         anio_max = int(df[col_fecha].dt.year.max())
 
@@ -549,7 +543,6 @@ with tab5:
 
         ventas_rango = df[(df[col_fecha] >= fecha_inicio) & (df[col_fecha] <= fecha_fin)].copy()
 
-        # ✅ Crear columna "Producto Completo" también como Producto (Variante)
         if col_variante in ventas_rango.columns:
             ventas_rango['Producto Completo'] = ventas_rango.apply(
                 lambda row: row[col_producto] if pd.isna(row[col_variante]) or str(row[col_variante]).strip() == ""
@@ -558,44 +551,31 @@ with tab5:
             )
         else:
             ventas_rango['Producto Completo'] = ventas_rango[col_producto]
-
         ventas_rango['Producto Completo'] = ventas_rango['Producto Completo'].str.upper().str.strip()
 
         ventas_por_producto = ventas_rango.groupby('Producto Completo')[col_cantidad].sum().reset_index()
-
         titulo_col_ventas = f"Vendidas desde {meses_es[mes_desde_num]} hasta {mes_hasta_str}"
         ventas_por_producto.columns = ['Producto Completo', titulo_col_ventas]
 
-        df_stock_cuadrado = pd.merge(
-            df_stock_filtrado,
-            ventas_por_producto,
-            on='Producto Completo',
-            how='left'
-        )
-
+        df_stock_cuadrado = pd.merge(df_stock_filtrado, ventas_por_producto, on='Producto Completo', how='left')
         df_stock_cuadrado[titulo_col_ventas] = df_stock_cuadrado[titulo_col_ventas].fillna(0)
 
-        # ✅ NUEVO: Margen x Vendidas periodo
-        if "Margen Unitario" in df_stock_cuadrado.columns:
-            df_stock_cuadrado["Margen x Vendidas periodo"] = (
-                df_stock_cuadrado["Margen Unitario"] * df_stock_cuadrado[titulo_col_ventas]
-            )
+        # 🔥 Nueva columna: Margen x Vendidas periodo
+        if 'Margen Unitario' in df_stock_cuadrado.columns:
+            df_stock_cuadrado['Margen x Vendidas periodo'] = df_stock_cuadrado['Margen Unitario'] * df_stock_cuadrado[titulo_col_ventas]
 
-        # ✅ Alerta de stock/ventas
         df_stock_cuadrado["Alerta"] = df_stock_cuadrado.apply(lambda row: (
             "❗ Sin ventas" if row[titulo_col_ventas] == 0 else
             "⚠️ Bajo Stock" if row[titulo_col_ventas] >= 20 and row.get("Stock", 0) < 5 else ""
         ), axis=1)
 
-        # ✅ NUEVO ORDEN sugerido por ti
-        orden_personalizado = [
-            "Alerta", "Producto Completo", "Stock",
-            titulo_col_ventas,
-            "Cantidad por Despachar", "Cantidad Disponible", "Por Recibir",
-            "Precio Venta Bruto", "Margen Unitario", "Margen x Vendidas periodo",
-            "Costo Neto Prom. Unitario", "Marca"
+        posibles_cols = [
+            "Producto Completo", "Marca", "Stock", "Cantidad por Despachar",
+            "Cantidad Disponible", "Por Recibir", "Costo Neto Prom. Unitario",
+            "Precio Venta Bruto", "Margen Unitario", "Margen x Vendidas periodo"
         ]
-        columnas_mostrar = [c for c in orden_personalizado if c in df_stock_cuadrado.columns]
+        columnas_mostrar = [c for c in posibles_cols if c in df_stock_cuadrado.columns]
+        columnas_mostrar += [titulo_col_ventas, "Alerta"]
 
         def formato_visual(val, tipo="entero"):
             try:
