@@ -506,6 +506,9 @@ with tab5:
             if seleccion_cat_stock != "Todas":
                 df_stock_filtrado = df_stock_filtrado[df_stock_filtrado[col_categoria_stock] == seleccion_cat_stock]
 
+            # Crear columna concatenada Producto Completo en df_stock_filtrado
+            df_stock_filtrado['Producto Completo'] = df_stock_filtrado['Producto'] + ' ' + df_stock_filtrado['Variante']  # <--
+
             # Asegurarse que la columna fecha está en datetime
             df[col_fecha] = pd.to_datetime(df[col_fecha], errors='coerce')
 
@@ -516,13 +519,11 @@ with tab5:
                 9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre"
             }
 
-            # Extraemos meses disponibles en df para mostrar al usuario
             meses_en_df = sorted(df[col_fecha].dt.month.dropna().unique())
             meses_nombre = [meses_es[m].capitalize() for m in meses_en_df]
 
             seleccion_mes = st.selectbox("Ventas acumuladas desde mes:", ["Enero"] + meses_nombre)
 
-            # Mapear mes seleccionado a número, normalizando a minúsculas
             inv_meses_es = {v.lower(): k for k, v in meses_es.items()}
             mes_desde_num = inv_meses_es.get(seleccion_mes.lower(), 1)
 
@@ -537,19 +538,23 @@ with tab5:
             fecha_inicio = pd.Timestamp(year=anio_min, month=mes_desde_num, day=1)
             fecha_fin = (pd.Timestamp(year=anio_max, month=mes_max_num, day=1) + MonthBegin(1)) - pd.Timedelta(days=1)
 
-            # Filtrar datos por rango fecha completo (año + mes)
             ventas_rango = df[(df[col_fecha] >= fecha_inicio) & (df[col_fecha] <= fecha_fin)]
 
-            ventas_por_producto = ventas_rango.groupby(col_producto)['Cantidad'].sum().reset_index()
+            # Crear columna Producto Completo en df de ventas para poder hacer merge correcto
+            ventas_rango['Producto Completo'] = ventas_rango[col_producto]  # Asumiendo col_producto es solo nombre de producto
+            # Si ventas tiene columna Variante y quieres concatenar, hazlo aquí. Si no, deja así.
+
+            # Agrupar ventas por Producto Completo
+            ventas_por_producto = ventas_rango.groupby('Producto Completo')['Cantidad'].sum().reset_index()
 
             titulo_col_ventas = f"Vendidas desde {meses_es[mes_desde_num]} hasta {mes_hasta_str}"
-            ventas_por_producto.columns = [col_producto, titulo_col_ventas]
+            ventas_por_producto.columns = ['Producto Completo', titulo_col_ventas]
 
-            col_prod_stock = "Producto"  # Que coincida con tu Excel
+            col_prod_stock = "Producto Completo"  # Ahora usamos la columna concatenada
 
             df_stock_cuadrado = pd.merge(
                 df_stock_filtrado, ventas_por_producto,
-                left_on=col_prod_stock, right_on=col_producto, how='left'
+                left_on=col_prod_stock, right_on='Producto Completo', how='left'
             )
             df_stock_cuadrado[titulo_col_ventas] = df_stock_cuadrado[titulo_col_ventas].fillna(0)
 
@@ -559,7 +564,7 @@ with tab5:
             ), axis=1)
 
             posibles_cols = [
-                "Producto", "Marca", "Stock Actual", "Cantidad por Despachar",
+                "Producto Completo", "Marca", "Stock Actual", "Cantidad por Despachar",
                 "Cantidad Disponible", "Por Recibir", "Costo Neto Prom. Unitario",
                 "Precio Venta Bruto", "Margen Unitario"
             ]
@@ -627,3 +632,4 @@ with tab5:
 
             else:
                 st.warning("No se encontraron columnas esperadas en archivo de stock para mostrar.")
+
