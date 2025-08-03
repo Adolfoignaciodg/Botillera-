@@ -398,7 +398,19 @@ with tab3:
         (df['Año'] == año_seleccionado) &
         (df['MesNombre'] == mes_seleccionado) &
         (df['Día'] == dia_seleccionado)
-    ]
+    ].copy()  # Copia para evitar SettingWithCopyWarning
+
+    # Agregar columna "Producto Completo" con lógica nombre + variante
+    if '+Variante' in df_detalle_fecha.columns:
+        df_detalle_fecha['Producto Completo'] = df_detalle_fecha.apply(
+            lambda row: row[col_producto] if pd.isna(row['+Variante']) or str(row['+Variante']).strip() == ""
+            else f"{row[col_producto]} ({str(row['+Variante']).strip()})",
+            axis=1
+        )
+    else:
+        df_detalle_fecha['Producto Completo'] = df_detalle_fecha[col_producto]
+
+    df_detalle_fecha['Producto Completo'] = df_detalle_fecha['Producto Completo'].str.upper().str.strip()
 
     if df_detalle_fecha.empty:
         st.warning("No hay datos para la fecha seleccionada.")
@@ -406,7 +418,7 @@ with tab3:
         ordenar_por = []
         if col_tipo_producto:
             ordenar_por.append(col_tipo_producto)
-        ordenar_por.append(col_producto)
+        ordenar_por.append('Producto Completo')  # Ordenar por Producto Completo en vez de solo producto
 
         df_detalle_fecha = df_detalle_fecha.sort_values(by=ordenar_por)
 
@@ -419,9 +431,11 @@ with tab3:
             else:
                 df_cat = df_detalle_fecha
 
-            cols_mostrar = [col_producto, 'Cantidad', 'Subtotal Neto']
+            # Mostrar Producto Completo en vez del solo nombre de producto para mejor claridad
+            cols_mostrar = ['Producto Completo', 'Cantidad', 'Subtotal Neto']
             cols_mostrar = [c for c in cols_mostrar if c in df_cat.columns]
             st.dataframe(df_cat[cols_mostrar], use_container_width=True)
+
 
 with tab4:
     st.markdown("## 🧾 Productos Repetidos y No Registrados")
