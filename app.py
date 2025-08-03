@@ -492,13 +492,11 @@ with tab5:
             'ENERGETICAS E ISOTONICAS', 'ESPUMANTES'
         ]
 
-        # Encuentra columna con categoría (tipo de producto)
         col_categoria_stock = next((c for c in df_stock.columns if "tipo de producto" in c.lower()), None)
         if not col_categoria_stock:
             st.error("No se encontró columna de categoría en archivo de stock.")
             st.stop()
 
-        # Filtrar por categorías relevantes
         df_stock_filtrado = df_stock[df_stock[col_categoria_stock].str.upper().isin(categorias_clave)]
 
         categorias_disponibles = sorted(df_stock_filtrado[col_categoria_stock].dropna().unique())
@@ -507,31 +505,24 @@ with tab5:
         if seleccion_cat_stock != "Todas":
             df_stock_filtrado = df_stock_filtrado[df_stock_filtrado[col_categoria_stock] == seleccion_cat_stock]
 
-        # Crear columna "Producto Completo" en stock: Producto + Variante si Variante existe
+        # ✅ Crear columna "Producto Completo" como Producto (Variante) si Variante existe
         df_stock_filtrado['Producto Completo'] = df_stock_filtrado.apply(
             lambda row: row['Producto'] if pd.isna(row['Variante']) or str(row['Variante']).strip() == ""
-            else f"{row['Producto']} {str(row['Variante']).strip()}",
+            else f"{row['Producto']} ({str(row['Variante']).strip()})",
             axis=1
         )
 
-        # Normalizar texto para evitar problemas en merge
         df_stock_filtrado['Producto Completo'] = df_stock_filtrado['Producto Completo'].str.upper().str.strip()
 
         # --- Carga de ventas ---
-        # Aquí debes cargar el df de ventas (df), asumo que ya tienes df cargado con tus datos de ventas
-        # y que tiene columnas +Producto / Servicio + Variante, +Cantidad, +Fecha Documento, etc.
-
-        # Definir nombres columna producto y fecha para facilitar
         col_producto = '+Producto / Servicio'
         col_variante = '+Variante'
         col_producto_variante = '+Producto / Servicio + Variante'
         col_cantidad = 'Cantidad'
         col_fecha = '+Fecha Documento'
 
-        # Asegurar columna fecha en datetime
         df[col_fecha] = pd.to_datetime(df[col_fecha], errors='coerce')
 
-        # Mapeo meses español para selectbox
         meses_es = {
             1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
             5: "mayo", 6: "junio", 7: "julio", 8: "agosto",
@@ -559,11 +550,11 @@ with tab5:
 
         ventas_rango = df[(df[col_fecha] >= fecha_inicio) & (df[col_fecha] <= fecha_fin)].copy()
 
-        # Crear Producto Completo en ventas igual que en stock
+        # ✅ Crear columna "Producto Completo" también como Producto (Variante)
         if col_variante in ventas_rango.columns:
             ventas_rango['Producto Completo'] = ventas_rango.apply(
                 lambda row: row[col_producto] if pd.isna(row[col_variante]) or str(row[col_variante]).strip() == ""
-                else f"{row[col_producto]} {str(row[col_variante]).strip()}",
+                else f"{row[col_producto]} ({str(row[col_variante]).strip()})",
                 axis=1
             )
         else:
@@ -571,13 +562,11 @@ with tab5:
 
         ventas_rango['Producto Completo'] = ventas_rango['Producto Completo'].str.upper().str.strip()
 
-        # Agrupar cantidad vendida por Producto Completo
         ventas_por_producto = ventas_rango.groupby('Producto Completo')[col_cantidad].sum().reset_index()
 
         titulo_col_ventas = f"Vendidas desde {meses_es[mes_desde_num]} hasta {mes_hasta_str}"
         ventas_por_producto.columns = ['Producto Completo', titulo_col_ventas]
 
-        # Merge cuadratura stock + ventas
         df_stock_cuadrado = pd.merge(
             df_stock_filtrado,
             ventas_por_producto,
@@ -587,13 +576,11 @@ with tab5:
 
         df_stock_cuadrado[titulo_col_ventas] = df_stock_cuadrado[titulo_col_ventas].fillna(0)
 
-        # Generar alertas simples
         df_stock_cuadrado["Alerta"] = df_stock_cuadrado.apply(lambda row: (
             "❗ Sin ventas" if row[titulo_col_ventas] == 0 else
             "⚠️ Bajo Stock" if row[titulo_col_ventas] >= 20 and row.get("Stock", 0) < 5 else ""
         ), axis=1)
 
-        # Columnas para mostrar (ajusta si tus nombres cambian)
         posibles_cols = [
             "Producto Completo", "Marca", "Stock", "Cantidad por Despachar",
             "Cantidad Disponible", "Por Recibir", "Costo Neto Prom. Unitario",
@@ -602,7 +589,6 @@ with tab5:
         columnas_mostrar = [c for c in posibles_cols if c in df_stock_cuadrado.columns]
         columnas_mostrar += [titulo_col_ventas, "Alerta"]
 
-        # Función para formato visual
         def formato_visual(val, tipo="entero"):
             try:
                 val = float(val)
@@ -648,7 +634,6 @@ with tab5:
         )
         st.dataframe(styled_df, use_container_width=True)
 
-        # Resumen por categoría
         palabras_clave = ['stock', 'cantidad por despachar', 'cantidad disponible', 'por recibir']
         columnas_resumen = [c for c in columnas_mostrar if any(p in c.lower() for p in palabras_clave)]
 
