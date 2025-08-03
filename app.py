@@ -380,7 +380,6 @@ with tab2:
 
         st.altair_chart(graf_abc, use_container_width=True)
 
-
 with tab3:
     st.markdown("## 📋 Detalle de Ventas por Día y Categoría")
 
@@ -447,6 +446,7 @@ with tab3:
             )
 
             st.dataframe(styler, use_container_width=True)
+
 
 
 with tab4:
