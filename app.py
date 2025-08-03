@@ -650,3 +650,4 @@ with tab5:
             st.dataframe(resumen_stock, use_container_width=True)
         else:
             st.warning("No se encontraron columnas esperadas en archivo de stock para mostrar.")
+
