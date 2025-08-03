@@ -430,22 +430,17 @@ with tab3:
             else:
                 df_cat = df_detalle_fecha
 
-            # Mostrar Producto Completo en vez del solo nombre de producto para mejor claridad
             cols_mostrar = ['Producto Completo', 'Cantidad', 'Subtotal Neto']
             cols_mostrar = [c for c in cols_mostrar if c in df_cat.columns]
 
-            # Formatear columna Subtotal Neto con separador de miles y sin decimales
+            df_cat = df_cat.copy()
+
+            # Formato personalizado para las columnas numéricas
+            if 'Cantidad' in df_cat.columns:
+                df_cat['Cantidad'] = df_cat['Cantidad'].apply(lambda x: f"{int(x):,}".replace(",", "."))
+
             if 'Subtotal Neto' in df_cat.columns:
-                df_cat = df_cat.copy()
                 df_cat['Subtotal Neto'] = df_cat['Subtotal Neto'].apply(lambda x: f"{int(x):,}".replace(",", "."))
-
-            # Aplicar estilo para alinear números a la derecha
-            styler = df_cat[cols_mostrar].style.set_properties(
-                subset=['Cantidad', 'Subtotal Neto'],
-                **{'text-align': 'right'}
-            )
-
-            st.dataframe(styler, use_container_width=True)
 
 
 
