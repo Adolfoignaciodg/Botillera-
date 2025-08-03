@@ -511,7 +511,6 @@ with tab5:
             else f"{row['Producto']} ({str(row['Variante']).strip()})",
             axis=1
         )
-
         df_stock_filtrado['Producto Completo'] = df_stock_filtrado['Producto Completo'].str.upper().str.strip()
 
         # --- Carga de ventas ---
@@ -576,18 +575,27 @@ with tab5:
 
         df_stock_cuadrado[titulo_col_ventas] = df_stock_cuadrado[titulo_col_ventas].fillna(0)
 
+        # ✅ NUEVO: Margen x Vendidas periodo
+        if "Margen Unitario" in df_stock_cuadrado.columns:
+            df_stock_cuadrado["Margen x Vendidas periodo"] = (
+                df_stock_cuadrado["Margen Unitario"] * df_stock_cuadrado[titulo_col_ventas]
+            )
+
+        # ✅ Alerta de stock/ventas
         df_stock_cuadrado["Alerta"] = df_stock_cuadrado.apply(lambda row: (
             "❗ Sin ventas" if row[titulo_col_ventas] == 0 else
             "⚠️ Bajo Stock" if row[titulo_col_ventas] >= 20 and row.get("Stock", 0) < 5 else ""
         ), axis=1)
 
-        posibles_cols = [
-            "Producto Completo", "Marca", "Stock", "Cantidad por Despachar",
-            "Cantidad Disponible", "Por Recibir", "Costo Neto Prom. Unitario",
-            "Precio Venta Bruto", "Margen Unitario"
+        # ✅ NUEVO ORDEN sugerido por ti
+        orden_personalizado = [
+            "Alerta", "Producto Completo", "Stock",
+            titulo_col_ventas,
+            "Cantidad por Despachar", "Cantidad Disponible", "Por Recibir",
+            "Precio Venta Bruto", "Margen Unitario", "Margen x Vendidas periodo",
+            "Costo Neto Prom. Unitario", "Marca"
         ]
-        columnas_mostrar = [c for c in posibles_cols if c in df_stock_cuadrado.columns]
-        columnas_mostrar += [titulo_col_ventas, "Alerta"]
+        columnas_mostrar = [c for c in orden_personalizado if c in df_stock_cuadrado.columns]
 
         def formato_visual(val, tipo="entero"):
             try:
@@ -650,4 +658,3 @@ with tab5:
             st.dataframe(resumen_stock, use_container_width=True)
         else:
             st.warning("No se encontraron columnas esperadas en archivo de stock para mostrar.")
-
