@@ -647,6 +647,19 @@ with tab5:
         df_stock_cuadrado["Costo Neto Prom. Unitario"] = df_stock_cuadrado["Costo Neto Prom. Unitario"].apply(limpiar_a_numero_positivo)
         df_stock_cuadrado["Stock"] = pd.to_numeric(df_stock_cuadrado["Stock"], errors='coerce').fillna(0)
 
+        # Aquí aplicamos la lógica personalizada para "Cantidad Disponible"
+        def calcular_cantidad_disponible(row):
+            nombre_producto = row['Producto Completo']
+            stock = row['Stock']
+            vendidas = row[titulo_col_ventas]
+            if "PACK CERVEZA" in nombre_producto:
+                return "No aplica"
+            else:
+                cant_disp = stock - vendidas
+                return max(cant_disp, 0)
+
+        df_stock_cuadrado["Cantidad Disponible"] = df_stock_cuadrado.apply(calcular_cantidad_disponible, axis=1)
+
         df_stock_cuadrado["Valor en Stock (Costo Total)"] = (
             df_stock_cuadrado["Stock"] * df_stock_cuadrado["Costo Neto Prom. Unitario"]
         )
