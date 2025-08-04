@@ -670,7 +670,7 @@ with tab5:
         columnas_mostrar = [
             "Alerta",
             "Producto Completo",
-            "ultimo inventario",
+            "Stock",
             titulo_col_ventas,
             "Cantidad por Despachar",
             "Cantidad Disponible",
