@@ -647,16 +647,14 @@ with tab5:
         df_stock_cuadrado["Costo Neto Prom. Unitario"] = df_stock_cuadrado["Costo Neto Prom. Unitario"].apply(limpiar_a_numero_positivo)
         df_stock_cuadrado["Stock"] = pd.to_numeric(df_stock_cuadrado["Stock"], errors='coerce').fillna(0)
 
-        # Aquí aplicamos la lógica personalizada para "Cantidad Disponible"
+        # --- NUEVO: Cálculo personalizado para "Cantidad Disponible" ---
         def calcular_cantidad_disponible(row):
             nombre_producto = row['Producto Completo']
-            stock = row['Stock']
-            vendidas = row[titulo_col_ventas]
-            if "PACK CERVEZA" in nombre_producto:
+            if 'PACK' in nombre_producto:
                 return "No aplica"
             else:
-                cant_disp = stock - vendidas
-                return max(cant_disp, 0)
+                disponible = row["Stock"] - row[titulo_col_ventas]
+                return max(disponible, 0)
 
         df_stock_cuadrado["Cantidad Disponible"] = df_stock_cuadrado.apply(calcular_cantidad_disponible, axis=1)
 
@@ -731,7 +729,8 @@ with tab5:
         )
         st.dataframe(styled_df, use_container_width=True)
 
-        palabras_clave = ['stock', 'cantidad por despachar', 'cantidad disponible', 'por recibir', 'valor en stock (costo total)']
+        # Excluir "Cantidad Disponible" del resumen porque tiene valores mixtos (texto + números)
+        palabras_clave = ['stock', 'cantidad por despachar', 'por recibir', 'valor en stock (costo total)']
         columnas_resumen = [c for c in df_stock_cuadrado.columns if any(p in c.lower() for p in palabras_clave)]
 
         if columnas_resumen:
